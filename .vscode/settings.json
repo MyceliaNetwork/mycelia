@@ -30,7 +30,7 @@
       "--all-targets",
   ],
   "rust-analyzer.checkOnSave": true,
-  "rust-analyzer.linkedProjects": [
-      "./services_wasm/Cargo.toml"
-  ],
+//   "rust-analyzer.linkedProjects": [
+//       "./cli/Cargo.toml"
+//   ],
 }

@@ -1,0 +1,5 @@
+package mycelia:execution@0.0.1
+
+world function-world {
+  export init: func()
+}
