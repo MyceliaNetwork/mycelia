@@ -1,0 +1,475 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'sdk_types'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=sdk_types"
+        ],
+        "filter": {
+          "name": "sdk_types",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'sdk'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=sdk"
+        ],
+        "filter": {
+          "name": "sdk",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'host'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=host",
+          "--package=host"
+        ],
+        "filter": {
+          "name": "host",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'host'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=host",
+          "--package=host"
+        ],
+        "filter": {
+          "name": "host",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'auth'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=auth"
+        ],
+        "filter": {
+          "name": "auth",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'common'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=common"
+        ],
+        "filter": {
+          "name": "common",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'middleware'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=middleware"
+        ],
+        "filter": {
+          "name": "middleware",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'runtime_engine'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=runtime_engine"
+        ],
+        "filter": {
+          "name": "runtime_engine",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'profile_mem'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=profile_mem",
+          "--package=runtime_engine"
+        ],
+        "filter": {
+          "name": "profile_mem",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'profile_mem'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=profile_mem",
+          "--package=runtime_engine"
+        ],
+        "filter": {
+          "name": "profile_mem",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug integration test 'test'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--test=test",
+          "--package=sdk_macros"
+        ],
+        "filter": {
+          "name": "test",
+          "kind": "test"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'mono_service'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=mono_service",
+          "--package=mono_service"
+        ],
+        "filter": {
+          "name": "mono_service",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'mono_service'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=mono_service",
+          "--package=mono_service"
+        ],
+        "filter": {
+          "name": "mono_service",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'route_cache_worker'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=route_cache_worker",
+          "--package=route_cache_worker"
+        ],
+        "filter": {
+          "name": "route_cache_worker",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'route_cache_worker'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=route_cache_worker",
+          "--package=route_cache_worker"
+        ],
+        "filter": {
+          "name": "route_cache_worker",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'routing_service'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=routing_service",
+          "--package=routing_service"
+        ],
+        "filter": {
+          "name": "routing_service",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'routing_service'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=routing_service",
+          "--package=routing_service"
+        ],
+        "filter": {
+          "name": "routing_service",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'module_compiler_worker'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=module_compiler_worker",
+          "--package=module_compiler_worker"
+        ],
+        "filter": {
+          "name": "module_compiler_worker",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'module_compiler_worker'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=module_compiler_worker",
+          "--package=module_compiler_worker"
+        ],
+        "filter": {
+          "name": "module_compiler_worker",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'runtime_actor'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=runtime_actor"
+        ],
+        "filter": {
+          "name": "runtime_actor",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug example 'spawn_actors'",
+      "cargo": {
+        "args": [
+          "build",
+          "--example=spawn_actors",
+          "--package=runtime_actor"
+        ],
+        "filter": {
+          "name": "spawn_actors",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'spawn_actors'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=spawn_actors",
+          "--package=runtime_actor"
+        ],
+        "filter": {
+          "name": "spawn_actors",
+          "kind": "example"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'actor'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--lib",
+          "--package=actor"
+        ],
+        "filter": {
+          "name": "actor",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'cli'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=cli",
+          "--package=cli"
+        ],
+        "filter": {
+          "name": "cli",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'cli'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=cli",
+          "--package=cli"
+        ],
+        "filter": {
+          "name": "cli",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

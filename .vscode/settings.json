@@ -1,0 +1,36 @@
+{
+  "files.insertFinalNewline": true,
+  "editor.formatOnSave": true,
+  "files.trimTrailingWhitespace": true,
+  "editor.semanticTokenColorCustomizations": {
+      "rules": {
+          "*.unsafe:rust": "#eb5046"
+      }
+  },
+  "files.exclude": {
+      "target_ra/**": true,
+      "target_wasm/**": true
+  },
+  // Tell Rust Analyzer to use its own target directory, so we don't need to wait for it to finish wen we want to `cargo run`
+  "rust-analyzer.check.overrideCommand": [
+      "cargo",
+      "cranky",
+      "--target-dir=target_ra",
+      "--workspace",
+      "--message-format=json",
+      "--all-targets",
+  ],
+  "rust-analyzer.cargo.buildScripts.overrideCommand": [
+      "cargo",
+      "check",
+      "--quiet",
+      "--target-dir=target_ra",
+      "--workspace",
+      "--message-format=json",
+      "--all-targets",
+  ],
+  "rust-analyzer.checkOnSave": true,
+  "rust-analyzer.linkedProjects": [
+      "./services_wasm/Cargo.toml"
+  ],
+}
