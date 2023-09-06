@@ -12,16 +12,25 @@ wit_bindgen::generate!({
     // namely the `run` function.
     exports: {
         world: MyFunction,
+        "mycelia:execution/function-interface": MyFunction
     },
 });
+
+use mycelia::execution::function_interface::*;
 
 // Define a custom type and implement the generated `Guest` trait for it which
 // represents implementing all the necessary exported interfaces for this
 // component.
+
+
 struct MyFunction;
 
 impl Guest for MyFunction {
     fn init() {
         print!("Hello, world!");
+    }
+
+    fn test(v : FooBar) -> String {
+        format!("Hello, {}!", v.name)
     }
 }

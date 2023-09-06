@@ -1,5 +1,14 @@
 package mycelia:execution@0.0.1
 
+interface function-interface {
+  record foo-bar {
+    name: string,
+  }
+}
+
 world function-world {
+  use function-interface.{foo-bar}
+
   export init: func()
+  export test: func(v : foo-bar) -> string
 }
