@@ -1,7 +1,5 @@
 // src/lib.rs
 
-use wit_bindgen::Resource;
-
 // Use a procedural macro to generate bindings for the world we specified in
 // `host.wit`
 wit_bindgen::generate!({
@@ -18,8 +16,6 @@ wit_bindgen::generate!({
     },
 });
 
-
-
 // Define a custom type and implement the generated `Guest` trait for it which
 // represents implementing all the necessary exported interfaces for this
 // component.
@@ -35,7 +31,7 @@ impl Guest for MyFunction {
         format!("Hello, {}!", v.name)
     }
 
-    fn test_resource(v : Cool) -> String {
+    fn test_resource(v: Cool) -> String {
         v.name()
     }
 }
