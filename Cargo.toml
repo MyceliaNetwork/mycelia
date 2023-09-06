@@ -5,3 +5,5 @@ members = [
   "runtime",
   "guests/function"
 ]
+
+resolver= "2"

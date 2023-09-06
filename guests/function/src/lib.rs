@@ -1,5 +1,7 @@
 // src/lib.rs
 
+use wit_bindgen::Resource;
+
 // Use a procedural macro to generate bindings for the world we specified in
 // `host.wit`
 wit_bindgen::generate!({
@@ -31,5 +33,9 @@ impl Guest for MyFunction {
 
     fn test(v: FooBar) -> String {
         format!("Hello, {}!", v.name)
+    }
+
+    fn test_resource(v : Cool) -> String {
+        v.name()
     }
 }

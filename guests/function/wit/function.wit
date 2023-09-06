@@ -9,6 +9,13 @@ interface function-interface {
 world function-world {
   use function-interface.{foo-bar}
 
+
+  resource cool {
+    constructor()
+    name: func() -> string
+  }
+
   export init: func()
   export test: func(v : foo-bar) -> string
+  export test-resource: func(v : cool) -> string
 }

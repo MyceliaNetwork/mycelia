@@ -1,9 +1,0 @@
-package mycelia:execution@0.0.1
-
-interface function-interface {
-  init: func()
-}
-
-world function-world {
-  import function-interface
-}
