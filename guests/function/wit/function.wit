@@ -1,14 +1,54 @@
 package mycelia:execution@0.0.1
 
-interface function-interface {
-  record foo-bar {
-    name: string,
+// ATTENTION :)
+// These are intended only to get mycelia to MVP.
+// Once https://github.com/WebAssembly/wasi-http matures
+// We MUST move towards adoping support.
+// This is non-negotiable.
+
+interface types {
+  type status = u16
+  variant method {
+    get,
+    head,
+    post,
+    put,
+    delete,
+    connect,
+    options,
+    trace,
+    patch,
+    other(string)
+  }
+
+  type headers = list<tuple<string, string>>
+  type body = list<u8>
+  type uri = string
+
+  // Used for producing requests only
+  record options {
+    timeout-ms: option<u32>,
+  }
+
+  record http-request {
+    method: method,
+    headers: headers,
+    body: body,
+    uri: uri,
+  }
+
+  record http-response {
+    status: status,
+    headers: headers,
+    body: body,
   }
 }
 
 world function-world {
-  use function-interface.{foo-bar}
+  // todo.. these aren't real
+  use types.{http-request, http-response}
 
-  export init: func()
-  export test: func(v : foo-bar) -> string
+
+  export handle-request: func(req: http-request) -> http-response
 }
+
