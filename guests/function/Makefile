@@ -1,7 +1,0 @@
-all: build post_process
-
-build:
-	cargo build --target wasm32-wasi --release
-
-post_process:
-	wasm-tools component new ../../target/wasm32-wasi/release/mycelia_guest_function.wasm --adapt ../../wasi_snapshot_preview1.reactor.wasm.dev -o ../../components/function-component.wasm

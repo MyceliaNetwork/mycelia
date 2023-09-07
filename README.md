@@ -1,5 +1,14 @@
 # mycelia
+
 Open Source Application Stack &amp; PaaS
+
+## Installation
+
+```sh
+cargo xtask build
+```
+
+NOTE: We opted for [cargo-xtask](https://github.com/matklad/cargo-xtask) because Cargo build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
 
 ## Community & Contributing & Help
 
@@ -23,15 +32,14 @@ In the lliekly event that's not enough context, the repo previously hosting this
 2. Everything you wanted to know about [Resources](https://github.com/bytecodealliance/wasmtime/blob/432b5471ec4bf6d51173def284cd418be6849a49/crates/wasmtime/src/component/resources.rs#L281)
 
 ### `Questions`
+
 1. Whats the lifetime behavior of resources??
 
-
-
 /// Todo..
+
 - Lock more dep versions in workspace.deps
 
 - Build `FunctionComponentService`
-    - a thing that takes invocation requests and produces responses
-      wrapped in a tower service
+  - a thing that takes invocation requests and produces responses
+    wrapped in a tower service
 - ^ take above into `development_server` :D
-
