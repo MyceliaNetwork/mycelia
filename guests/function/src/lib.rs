@@ -16,7 +16,6 @@ wit_bindgen::generate!({
     },
 });
 
-
 // A Simple Test Function that echos what
 // is passed to it. Or, returns "hello world"
 struct TestFunction;
@@ -25,7 +24,9 @@ impl Guest for TestFunction {
     fn handle_request(req: HttpRequest) -> HttpResponse {
         let body = if req.body.len() > 0 {
             req.body
-        } else {"hello world".into()};
+        } else {
+            "hello world".into()
+        };
 
         HttpResponse {
             status: 200,

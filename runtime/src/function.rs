@@ -14,15 +14,18 @@ pub mod types {
 #[cfg(test)]
 mod test {
     use anyhow::Context;
-    use wasmtime::{component::{Component, Linker}, Store};
+    use wasmtime::{
+        component::{Component, Linker},
+        Store,
+    };
     use wasmtime_wasi::preview2::command::add_to_linker;
 
-    use crate::{engine::new_engine, ServerWasiView};
-    use crate::function::FunctionWorld;
     use crate::function::types::*;
+    use crate::function::FunctionWorld;
+    use crate::{engine::new_engine, ServerWasiView};
 
     #[tokio::test]
-   async fn it_invokes_a_function() -> anyhow::Result<()> {
+    async fn it_invokes_a_function() -> anyhow::Result<()> {
         let engine = new_engine().context("Failed to get engine")?;
         let mut linker = Linker::new(&engine);
 
@@ -35,13 +38,22 @@ mod test {
 
         let _ = add_to_linker(&mut linker).context("Failed to add command wolrd to linker")?;
 
-        let (bindings, _instance) = FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker).await
-            .context("Failed to get Function World")?;
+        let (bindings, _instance) =
+            FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker)
+                .await
+                .context("Failed to get Function World")?;
 
         let should_echo = HttpRequest {
-            method: Method::Get, headers: vec![], body: vec![2, 4, 6], uri: "foo".into() };
+            method: Method::Get,
+            headers: vec![],
+            body: vec![2, 4, 6],
+            uri: "foo".into(),
+        };
 
-        let result: HttpResponse = bindings.call_handle_request(&mut store, &should_echo).await.context("Failed to invoke the test function")?;
+        let result: HttpResponse = bindings
+            .call_handle_request(&mut store, &should_echo)
+            .await
+            .context("Failed to invoke the test function")?;
 
         assert_eq!(result.status, 200u16);
         assert_eq!(result.body, vec![2, 4, 6]);
