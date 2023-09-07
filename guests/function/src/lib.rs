@@ -11,27 +11,26 @@ wit_bindgen::generate!({
     // struct defined below is going to define the exports of the `world`,
     // namely the `run` function.
     exports: {
-        world: MyFunction,
-        "mycelia:execution/function-interface": MyFunction
+        world: TestFunction,
+        "mycelia:execution/function-interface": TestFunction
     },
 });
 
-// Define a custom type and implement the generated `Guest` trait for it which
-// represents implementing all the necessary exported interfaces for this
-// component.
 
-struct MyFunction;
+// A Simple Test Function that echos what
+// is passed to it. Or, returns "hello world"
+struct TestFunction;
 
-impl Guest for MyFunction {
-    fn init() {
-        print!("Hello, world!");
-    }
+impl Guest for TestFunction {
+    fn handle_request(req: HttpRequest) -> HttpResponse {
+        let body = if req.body.len() > 0 {
+            req.body
+        } else {"hello world".into()};
 
-    fn test(v: FooBar) -> String {
-        format!("Hello, {}!", v.name)
-    }
-
-    fn test_resource(v: Cool) -> String {
-        v.name()
+        HttpResponse {
+            status: 200,
+            headers: vec![],
+            body,
+        }
     }
 }
