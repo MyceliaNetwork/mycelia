@@ -3,7 +3,12 @@
 members = [
   "cli",
   "runtime",
-  "guests/function"
+  "guests/function",
+  "development_server",
 ]
 
 resolver= "2"
+
+[workspace.dependencies]
+anyhow = "1.0.75"
+async-trait = "0.1.73"
