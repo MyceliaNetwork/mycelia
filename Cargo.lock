@@ -678,6 +678,7 @@ dependencies = [
 name = "function_service"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "tokio",
  "wasmtime",
  "wasmtime-wasi",

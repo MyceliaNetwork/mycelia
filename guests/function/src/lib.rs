@@ -17,6 +17,10 @@ wit_bindgen::generate!({
     },
 });
 
+// Todo produce exports..
+
+
+
 // A Simple Test Function that echos what
 // is passed to it. Or, returns "hello world"
 struct TestFunction;
