@@ -1,5 +1,5 @@
 [package]
-name = "function"
+name = "mycelia_guest_function"
 version = "0.1.0"
 edition = "2021"
 

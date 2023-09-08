@@ -1,10 +1,15 @@
 [workspace]
 
 members = [
+  # Tooling
   "cli",
-  "runtime",
-  "guests/function",
   "development_server",
+
+  # Services
+  "services/function",
+
+  # Guests
+  "guests/function",
 ]
 
 resolver= "2"

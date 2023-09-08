@@ -1,7 +1,7 @@
 use wasmtime::component::*;
 
 bindgen!({
-  path: "../guests/function/wit/function.wit",
+  path: "../../guests/function/wit/function.wit",
   async: true
 });
 
@@ -9,6 +9,7 @@ pub mod types {
     pub type HttpRequest = crate::function::mycelia::execution::types::HttpRequest;
     pub type HttpResponse = crate::function::mycelia::execution::types::HttpResponse;
     pub type Method = crate::function::mycelia::execution::types::Method;
+    pub type FunctionWorld = crate::function::FunctionWorld;
 }
 
 #[cfg(test)]
@@ -22,7 +23,7 @@ mod test {
 
     use crate::function::types::*;
     use crate::function::FunctionWorld;
-    use crate::{engine::new_engine, ServerWasiView};
+    use crate::{test::new_engine, ServerWasiView};
 
     #[tokio::test]
     async fn it_invokes_a_function() -> anyhow::Result<()> {
@@ -33,7 +34,7 @@ mod test {
             Component::from_file(&engine, "../components/function-component.wasm")
                 .context("Failed to load component. Does it exist in ./components?")?;
 
-        let host_view = ServerWasiView::new();
+        let host_view = modname::ServerWasiView::new();
         let mut store = Store::new(&engine, host_view);
 
         let _ = add_to_linker(&mut linker).context("Failed to add command wolrd to linker")?;
