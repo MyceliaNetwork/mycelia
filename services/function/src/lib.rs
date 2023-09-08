@@ -3,14 +3,8 @@ mod function;
 mod test {
     use std::path::Path;
 
-    use wasmtime::component::Component;
     use wasmtime::{component::*, Engine};
-    use wasmtime_wasi::preview2::WasiCtx;
     use wasmtime_wasi::preview2::{Table, WasiCtx};
-
-    use wasmtime_wasi::preview2::Table;
-
-    use super::test::ServerWasiView;
 
     use wasmtime_wasi::preview2::WasiView;
 
@@ -46,8 +40,6 @@ mod test {
 
     use wasmtime;
 
-    use std::path::Path;
-
     pub fn create_function_component(
         path: &Path,
         engine: &Engine,
@@ -57,11 +49,7 @@ mod test {
 
     use wasmtime_wasi::preview2::WasiCtxBuilder;
 
-    use wasmtime_wasi::preview2::WasiCtx;
-
-    use wasmtime_wasi::preview2::Table;
-
-    pub(crate) struct ServerWasiView {
+    struct ServerWasiView {
         pub(crate) table: Table,
         pub(crate) ctx: WasiCtx,
     }
