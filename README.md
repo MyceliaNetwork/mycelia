@@ -28,8 +28,8 @@ In the lliekly event that's not enough context, the repo previously hosting this
 
 
 /// Todo..
+- Lock more dep versions in workspace.deps
 
-Finish refactoring `function_service`
 - Build `FunctionComponentService`
     - a thing that takes invocation requests and produces responses
       wrapped in a tower service
