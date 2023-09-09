@@ -1,5 +1,5 @@
 [package]
-name = "function_service"
+name = "wasmtime_components"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,5 +11,4 @@ tokio = { version = "1.32.0", features = ["full"] }
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main", features = ["component-model"] }
 wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main"}
 tower = { version = "0.4.13", features = ["full"] }
-wasmtime_components = {path = "../../wasmtime_components"}
-http = "0.2.9"
+lazy_static = "1.4.0"

@@ -4,7 +4,8 @@ members = [
   # Tooling
   "cli",
   "development_server",
-
+  "wasmtime_components",
+  
   # Services
   "services/function",
 

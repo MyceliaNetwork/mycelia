@@ -1,5 +1,3 @@
-use wasmtime::component::*;
-
 mod bindgen {
     use wasmtime::component::*;
 
@@ -10,6 +8,8 @@ mod bindgen {
 }
 
 pub mod types {
+    use http::Request;
+
     pub type HttpRequest = crate::bindgen::mycelia::execution::types::HttpRequest;
     pub type HttpResponse = crate::bindgen::mycelia::execution::types::HttpResponse;
     pub type Method = crate::bindgen::mycelia::execution::types::Method;
@@ -22,13 +22,19 @@ pub mod types {
 ///!
 
 pub mod service {
+    use std::path::Path;
+    use std::sync::Arc;
     use std::{future::Future, pin::Pin};
-    use tokio::sync::mpsc::{Sender, Receiver, channel};
+    use tokio::sync::mpsc::{channel, Receiver, Sender};
 
-    use tokio::sync::oneshot;
+    use tokio::sync::{oneshot, Mutex};
     use tokio::task::JoinHandle;
+    use tower::{MakeService, service_fn, ServiceExt};
     use tower::{util::BoxService, BoxError, Service};
-    use wasmtime::{AsContextMut, AsContext};
+    use wasmtime::Store;
+    use wasmtime::component::{Component, Linker};
+    use wasmtime_components::runtime::new_linker;
+    use wasmtime_components::runtime_view::RuntimeView;
 
     use crate::types::*;
 
@@ -49,40 +55,69 @@ pub mod service {
 
     struct InnerService {
         request_sink: RequestSink,
-        handle: JoinHandle<()>
+        handle: JoinHandle<()>,
     }
 
+    impl Into<FunctionComponentService> for InnerService {
+        fn into(self) -> FunctionComponentService {
+            BoxService::new(self)
+        }
+    }
 
-    async fn run_inner_service_loop<T: wasmtime::AsContextMut>(bindings: FunctionWorld, instance: wasmtime::component::Instance, mut store: T, mut rx : RequestSource)
-        where <T as wasmtime::AsContext>::Data : Send
+    async fn run_inner_service_loop<T: wasmtime::AsContextMut>(
+        bindings: FunctionWorld,
+        _instance: wasmtime::component::Instance,
+        mut store: T,
+        mut rx: RequestSource,
+    ) where
+        <T as wasmtime::AsContext>::Data: Send,
     {
         while let Some((request, reply)) = rx.recv().await {
-            let response = bindings.call_handle_request(&mut store, &request).await.map_err(BoxError::from);
+            let response = bindings
+                .call_handle_request(&mut store, &request)
+                .await
+                .map_err(BoxError::from);
             let _ = reply.send(response);
         }
     }
 
     impl InnerService {
-        pub fn new<T: wasmtime::AsContextMut + Send + 'static>(bindings: FunctionWorld, instance: wasmtime::component::Instance, store: T, buffer_size: usize) -> Self
-            where <T as wasmtime::AsContext>::Data : Send
+        pub fn new<T: wasmtime::AsContextMut + Send + 'static>(
+            bindings: FunctionWorld,
+            instance: wasmtime::component::Instance,
+            store: T,
+            buffer_size: usize,
+        ) -> Self
+        where
+            <T as wasmtime::AsContext>::Data: Send,
         {
             let (request_sink, request_source) = channel(buffer_size);
 
-            let handle = tokio::spawn(run_inner_service_loop(bindings, instance, store, request_source));
+            let handle = tokio::spawn(run_inner_service_loop(
+                bindings,
+                instance,
+                store,
+                request_source,
+            ));
 
-            Self { request_sink, handle }
+            Self {
+                request_sink,
+                handle,
+            }
         }
     }
 
-    impl Service<HttpRequest> for InnerService
-    {
+    impl Service<HttpRequest> for InnerService {
         type Response = HttpResponse;
 
         type Error = BoxError;
 
         type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-        fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+        fn poll_ready(
+            &mut self,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
             // We can slow down the rate of invocation here if needed in the future
             std::task::Poll::Ready(Ok(()))
         }
@@ -95,32 +130,81 @@ pub mod service {
 
                 let (reply_tx, reply_rx) = oneshot::channel::<InnerResponse>();
 
-                let _ = pipe.send((
-                    req,
-                    reply_tx
-                )).await.map_err(BoxError::from)?;
+                let _ = pipe.send((req, reply_tx)).await.map_err(BoxError::from)?;
 
                 reply_rx.await?.map_err(BoxError::from)
             })
         }
     }
 
+    async fn new_function_component_svc(base_component: &Component, mut store : Store<RuntimeView>, linker: &Linker<RuntimeView>) -> Result<FunctionComponentService, BoxError> {
+        let (bindings, instance) = FunctionWorld::instantiate_async(&mut store, base_component, &linker).await?;
+        Ok(InnerService::new(bindings, instance, store, 100).into())
+    }
+
     // Notes
     // The underlaying calls proxied by the bindings to the FunctionWorld can be better understood by looking at
     // https://github.com/bytecodealliance/wasmtime/blob/181d005c45965b580b05df7bdaa29a8a4b4e5827/crates/wasmtime/src/func/typed.rs#L110
     // https://github.com/bytecodealliance/wasmtime/blob/main/crates/wasmtime/src/store.rs#L1615
-    pub async fn new(
-        bindings: FunctionWorld,
-        instance: wasmtime::component::Instance,
-    ) -> FunctionComponentService {
-        todo!()
+
+    // Produces a FunctionComponentServicer maker for a specific `base_component`.
+    // `base_component` is a unique instance of a **guest code implmentation**.
+
+    // Notes:
+    // 1. We might need to use a precompiled `Component`. Not sure if creating the `Component`
+    // produces a precompiled on out of the box.
+    // 2.
+
+    // Use caution when moving the created instance around. Inproper sharing will
+    // lead to downsteam errors in guest code and leaking VM resources.
+
+    // TODO the produced maker should take a request which can be used to assure
+    // the caller is producing the correct guest instances.
+    pub fn new_function_service_maker(base_component: Component, store_producer : wasmtime_components::runtime::StoreProducer) -> BoxService<(), FunctionComponentService, BoxError> {
+        let linker = Arc::new(Mutex::new(new_linker()));
+
+        let future_producer = move |_v : ()| {
+            let linker = linker.clone();
+            let base_component = base_component.clone();
+            let store_maker = store_producer.clone();
+
+            async move {
+                let mut linker = linker.clone();
+                let mut linker = linker.lock().await;
+
+                let base_component = base_component.clone();
+                let mut store_maker = store_maker.clone();
+
+                let ready_store_maker = store_maker.ready();
+                let ready_store_maker = ready_store_maker.await;
+                let ready_store_maker = ready_store_maker?;
+
+                let store = ready_store_maker.call(()).await?;
+
+                new_function_component_svc(&base_component, store, &mut linker).await
+            }
+        };
+
+        let svc = service_fn(future_producer);
+
+        return BoxService::new(svc);
+    }
+
+    pub fn empty_base_function_component() -> anyhow::Result<Component> {
+        wasmtime_components::runtime::new_component_from_path("../../components/function-component.wasm".into())
     }
 
     #[cfg(test)]
     mod test {
+        use crate::{
+            bindgen::HttpRequest,
+            types::{FunctionWorld, Method},
+        };
         use tower::Service;
-        use wasmtime::{Store, component::{Component, Linker}};
-        use crate::{types::{FunctionWorld, Method}, bindgen::HttpRequest};
+        use wasmtime::{
+            component::{Component, Linker},
+            Store,
+        };
 
         use super::InnerService;
 
@@ -128,22 +212,22 @@ pub mod service {
 
         #[tokio::test]
         async fn it_creates_and_invokes_a_function_component_service() {
-            let mut engine = crate::test::new_engine().unwrap();
+            let engine = crate::test::new_engine().unwrap();
             let mut linker = Linker::new(&engine);
 
-            let mut view = crate::test::ServerWasiView::new();
+            let view = crate::test::ServerWasiView::new();
             let mut store = Store::new(&engine, view);
 
             let _ = add_to_linker(&mut linker).unwrap();
 
-            let test_function_component =
-                Component::from_file(&engine, "../../components/function-component.wasm").unwrap();
+            let test_function_component = Component::from_file(&engine, "../../components/function-component.wasm").unwrap();
 
             let (bindings, instance) =
-                FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker).await.unwrap();
+                FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker)
+                    .await
+                    .unwrap();
 
             let mut service = InnerService::new(bindings, instance, store, 10);
-
 
             let should_echo = HttpRequest {
                 method: Method::Get,
@@ -249,5 +333,4 @@ mod test {
         assert_eq!(result.body, vec![2, 4, 6]);
         Ok(())
     }
-
 }

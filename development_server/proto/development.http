@@ -1,0 +1,6 @@
+proto < ./development.proto
+
+GRPC localhost:50051/development.Development/echo
+{
+  "message" : "Ping"
+}

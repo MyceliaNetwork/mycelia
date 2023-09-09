@@ -13,6 +13,8 @@ apt-get install -y \
   libssl-dev \
   libmysqlclient-dev \
   pkg-config \
+  protobuf-compiler \
+  libprotobuf-dev
 
 
 ## Install rustup and common components
