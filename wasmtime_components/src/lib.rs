@@ -1,7 +1,5 @@
 pub mod runtime_view {
-    use wasmtime_wasi::preview2::{
-        command::add_to_linker, Table, WasiCtx, WasiCtxBuilder, WasiView,
-    };
+    use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
 
     // In the future this will be where we provide guests
     // access to resources.
@@ -42,11 +40,14 @@ pub mod runtime_view {
 }
 
 pub mod runtime {
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     use lazy_static::lazy_static;
-    use tower::{service_fn, util::{BoxService, BoxCloneService}, BoxError, MakeService, ServiceBuilder};
-    use wasmtime::{component::{Linker, Component}, Config, Engine, Store};
+    use tower::{service_fn, util::BoxCloneService, BoxError};
+    use wasmtime::{
+        component::{Component, Linker},
+        Config, Engine, Store,
+    };
 
     use crate::runtime_view::RuntimeView;
     use wasmtime_wasi::preview2::command::add_to_linker;
@@ -82,15 +83,13 @@ pub mod runtime {
         linker
     }
 
-    pub fn new_component_from_path(path : PathBuf) -> anyhow::Result<Component> {
+    pub fn new_component_from_path(path: PathBuf) -> anyhow::Result<Component> {
         Component::from_file(&ENGINE, path)
     }
-
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn it_works() {}

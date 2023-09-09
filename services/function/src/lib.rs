@@ -8,7 +8,6 @@ mod bindgen {
 }
 
 pub mod types {
-    use http::Request;
 
     pub type HttpRequest = crate::bindgen::mycelia::execution::types::HttpRequest;
     pub type HttpResponse = crate::bindgen::mycelia::execution::types::HttpResponse;
@@ -22,17 +21,17 @@ pub mod types {
 ///!
 
 pub mod service {
-    use std::path::Path;
+
     use std::sync::Arc;
     use std::{future::Future, pin::Pin};
     use tokio::sync::mpsc::{channel, Receiver, Sender};
 
     use tokio::sync::{oneshot, Mutex};
     use tokio::task::JoinHandle;
-    use tower::{MakeService, service_fn, ServiceExt};
+    use tower::{service_fn, ServiceExt};
     use tower::{util::BoxService, BoxError, Service};
-    use wasmtime::Store;
     use wasmtime::component::{Component, Linker};
+    use wasmtime::Store;
     use wasmtime_components::runtime::new_linker;
     use wasmtime_components::runtime_view::RuntimeView;
 
@@ -137,8 +136,13 @@ pub mod service {
         }
     }
 
-    async fn new_function_component_svc(base_component: &Component, mut store : Store<RuntimeView>, linker: &Linker<RuntimeView>) -> Result<FunctionComponentService, BoxError> {
-        let (bindings, instance) = FunctionWorld::instantiate_async(&mut store, base_component, &linker).await?;
+    async fn new_function_component_svc(
+        base_component: &Component,
+        mut store: Store<RuntimeView>,
+        linker: &Linker<RuntimeView>,
+    ) -> Result<FunctionComponentService, BoxError> {
+        let (bindings, instance) =
+            FunctionWorld::instantiate_async(&mut store, base_component, &linker).await?;
         Ok(InnerService::new(bindings, instance, store, 100).into())
     }
 
@@ -160,16 +164,19 @@ pub mod service {
 
     // TODO the produced maker should take a request which can be used to assure
     // the caller is producing the correct guest instances.
-    pub fn new_function_service_maker(base_component: Component, store_producer : wasmtime_components::runtime::StoreProducer) -> BoxService<(), FunctionComponentService, BoxError> {
+    pub fn new_function_service_maker(
+        base_component: Component,
+        store_producer: wasmtime_components::runtime::StoreProducer,
+    ) -> BoxService<(), FunctionComponentService, BoxError> {
         let linker = Arc::new(Mutex::new(new_linker()));
 
-        let future_producer = move |_v : ()| {
+        let future_producer = move |_v: ()| {
             let linker = linker.clone();
             let base_component = base_component.clone();
             let store_maker = store_producer.clone();
 
             async move {
-                let mut linker = linker.clone();
+                let linker = linker.clone();
                 let mut linker = linker.lock().await;
 
                 let base_component = base_component.clone();
@@ -191,7 +198,9 @@ pub mod service {
     }
 
     pub fn empty_base_function_component() -> anyhow::Result<Component> {
-        wasmtime_components::runtime::new_component_from_path("../../components/function-component.wasm".into())
+        wasmtime_components::runtime::new_component_from_path(
+            "../../components/function-component.wasm".into(),
+        )
     }
 
     #[cfg(test)]
@@ -220,7 +229,8 @@ pub mod service {
 
             let _ = add_to_linker(&mut linker).unwrap();
 
-            let test_function_component = Component::from_file(&engine, "../../components/function-component.wasm").unwrap();
+            let test_function_component =
+                Component::from_file(&engine, "../../components/function-component.wasm").unwrap();
 
             let (bindings, instance) =
                 FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker)

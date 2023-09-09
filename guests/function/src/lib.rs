@@ -1,6 +1,5 @@
 // src/lib.rs
 
-
 // Use a procedural macro to generate bindings for the world we specified in
 // `host.wit`
 wit_bindgen::generate!({
