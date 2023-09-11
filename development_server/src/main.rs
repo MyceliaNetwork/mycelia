@@ -1,30 +1,22 @@
 mod component_service;
 
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+use std::{convert::Infallible, net::SocketAddr};
 
 use clap::Parser;
 use function_service::{
-    service::{
-        new_function_service_maker, FunctionComponentService, FunctionComponentServiceMaker,
-    },
+    service::{new_function_service_maker, FunctionComponentService},
     types::{HttpRequest, HttpResponse},
 };
 use hyper::service::Service as HyperService;
 use hyper::{
-    body::HttpBody,
-    server::conn::AddrStream,
-    service::{make_service_fn, service_fn},
-    Body, Request, Response, Server,
+    body::HttpBody, server::conn::AddrStream, service::make_service_fn, Body, Request, Response,
+    Server,
 };
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::sync::Mutex;
-use tower::{
-    builder,
-    util::{BoxCloneService, BoxService},
-    BoxError, MakeService, Service, ServiceBuilder, ServiceExt,
-};
+
+use tower::{util::BoxService, BoxError, Service, ServiceExt};
 
 async fn handle_function_request(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
     Ok(Response::new("hello world".into()))
@@ -38,7 +30,7 @@ type ServiceCommandSink = tokio::sync::mpsc::Sender<()>;
 type ServiceCommandSource = tokio::sync::mpsc::Receiver<()>;
 
 async fn start_rpc_server(command_sink: ServiceCommandSink, socket_addr: SocketAddr) {
-    let server = development_rpc_server::RpcServer::new(command_sink);
+    let server = rpc_server::RpcServer::new(command_sink);
     let server = protos::development_server::DevelopmentServer::new(server);
 
     let _server = tonic::transport::Server::builder()
@@ -123,9 +115,10 @@ async fn start_development_server(
     mut command_stream: ServiceCommandSource,
     socket_addr: SocketAddr,
 ) {
+    type HttpFunctionComponent = BoxService<Request<Body>, Response<Body>, BoxError>;
+
     let store_producer = wasmtime_components::runtime::make_store_producer();
-    let base_component = function_service::service::empty_base_function_component()
-        .expect("Failed to get a base component. Cannot continue");
+    let base_component = function_service::service::empty_base_function_component();
 
     let function_service_maker = new_function_service_maker(base_component, store_producer);
 
@@ -139,20 +132,14 @@ async fn start_development_server(
         })
     }
 
-    fn map_function_service(
-        service: FunctionComponentService,
-    ) -> BoxService<Request<Body>, Response<Body>, BoxError> {
+    fn map_function_service(service: FunctionComponentService) -> HttpFunctionComponent {
         let binding = service
             .map_request(resolve_map_future)
             .map_response(|resp| map_response(resp));
         binding.boxed()
     }
 
-    let function_service_maker: BoxCloneService<
-        (),
-        BoxService<Request<Body>, Response<Body>, BoxError>,
-        BoxError,
-    > = function_service_maker
+    let function_service_maker = function_service_maker
         .map_response(|v| map_function_service(v))
         .boxed_clone();
 
@@ -161,14 +148,14 @@ async fn start_development_server(
     let mut function_service_maker = function_service_maker.boxed_clone();
 
     let component_host_server = Server::bind(&socket_addr)
-        .serve(make_service_fn(move |v: &AddrStream| {
+        .serve(make_service_fn(move |_v: &AddrStream| {
             function_service_maker.call(())
         }))
         .with_graceful_shutdown(async move {
             let _ = shutdown_rx.await;
         });
 
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         while let Some(_command) = command_stream.recv().await {
             // Handle Command
         }
@@ -182,7 +169,7 @@ pub(crate) mod protos {
     tonic::include_proto!("development");
 }
 
-pub mod development_rpc_server {
+mod rpc_server {
     use crate::{
         protos::{development_server::Development, EchoReply, EchoRequest},
         ServiceCommandSink,
@@ -228,11 +215,8 @@ mod cmd {
 
 #[tokio::main]
 async fn main() {
-    let args = crate::cmd::Args::parse();
+    let _args = crate::cmd::Args::parse();
 
-    // Component Host
-
-    // Rpc Host
     let rpc_host_addr = SocketAddr::from(([127, 0, 0, 1], 50051));
     let http_host_addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
@@ -247,10 +231,10 @@ async fn main() {
 
     tokio::select! {
         _ = rpc_server_task_handle => {
-            println!("operation timed out");
+            println!("rpc server task completed");
         }
         _ = http_service_task_handle => {
-            println!("operation completed");
+            println!("http server task completed");
         }
     }
 }

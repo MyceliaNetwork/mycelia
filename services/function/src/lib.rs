@@ -201,10 +201,12 @@ pub mod service {
         return BoxCloneService::new(svc);
     }
 
-    pub fn empty_base_function_component() -> anyhow::Result<Component> {
+    pub fn empty_base_function_component() -> Component {
         let bytes = include_bytes!("../../../components/function-component.wasm");
 
-        wasmtime_components::runtime::new_component_from_bytes(bytes)
+        wasmtime_components::runtime::new_component_from_bytes(bytes).expect(
+            "base function component is corrupted. did you specify the correct componnent path?",
+        )
     }
 
     #[cfg(test)]
