@@ -2,7 +2,16 @@ syntax = "proto3";
 package development;
 
 service Development {
-  rpc Echo (EchoRequest) returns (EchoReply);
+  rpc Echo(EchoRequest) returns (EchoReply) {};
+  rpc DeployComponent(DeployRequest) returns (DeployReply) {};
+}
+
+message DeployRequest {
+  string component_path = 1;
+}
+
+message DeployReply {
+  string message = 1;
 }
 
 message EchoRequest {

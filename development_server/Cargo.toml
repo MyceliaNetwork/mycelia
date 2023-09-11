@@ -16,6 +16,7 @@ wasmtime_components = { path = "../wasmtime_components" }
 clap = { version = "4.4.2", features = ["derive"] }
 log = { workspace = true }
 env_logger = { workspace = true }
-
+anyhow = { workspace = true }
+tonic-reflection = "0.10.0"
 [build-dependencies]
 tonic-build = "0.10.0"

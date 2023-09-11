@@ -28,6 +28,7 @@ rustup target add wasm32-wasi
 
 cargo install cargo-expand
 cargo install cargo-edit
+cargo install wasm-tools
 
 ## setup and install oh-my-zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"

@@ -614,6 +614,7 @@ dependencies = [
 name = "development_server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "env_logger",
  "function_service",
@@ -623,6 +624,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-build",
+ "tonic-reflection",
  "tower",
  "wasmtime_components",
 ]
@@ -2091,6 +2093,19 @@ dependencies = [
  "prost-build",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tonic-reflection"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16e61add39c1426d5f21eae2cc196e97e1f5a5ea7bcf491df3885797992a86eb"
+dependencies = [
+ "prost",
+ "prost-types",
+ "tokio",
+ "tokio-stream",
+ "tonic",
 ]
 
 [[package]]

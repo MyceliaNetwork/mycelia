@@ -37,6 +37,7 @@ pub mod service {
     use wasmtime_components::runtime_view::RuntimeView;
 
     use crate::types::*;
+    pub type WasmComponent = Component;
 
     // Note, we're not using a BoxCloneService here
     // its unclear how FunctionWorld & Instance behave when cloned.
@@ -186,9 +187,7 @@ pub mod service {
                 let base_component = base_component.clone();
                 let mut store_maker = store_maker.clone();
 
-                let ready_store_maker = store_maker.ready();
-                let ready_store_maker = ready_store_maker.await;
-                let ready_store_maker = ready_store_maker?;
+                let ready_store_maker = store_maker.ready().await?;
 
                 let store = ready_store_maker.call(()).await?;
 

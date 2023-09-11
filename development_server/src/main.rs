@@ -1,7 +1,8 @@
 mod component_service;
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::Path, sync::Arc};
 
+use anyhow::anyhow;
 use clap::Parser;
 use function_service::{
     service::{new_function_service_maker, FunctionComponentService},
@@ -12,27 +13,42 @@ use hyper::{
     body::HttpBody, server::conn::AddrStream, service::make_service_fn, Body, Request, Response,
     Server,
 };
-use log::{info, warn};
+use log::{info, trace, warn};
 
+use tokio::sync::{oneshot, Mutex};
 use tower::{
     util::{BoxCloneService, BoxService},
     BoxError, Service, ServiceExt,
 };
 
-type ServiceCommandSink = tokio::sync::mpsc::Sender<()>;
-type ServiceCommandSource = tokio::sync::mpsc::Receiver<()>;
+pub enum ServiceCommand {
+    SwapFunctionComponent {
+        component_path: String,
+        reply: oneshot::Sender<anyhow::Result<()>>,
+    },
+}
+
+type ServiceCommandSink = tokio::sync::mpsc::Sender<ServiceCommand>;
+type ServiceCommandSource = tokio::sync::mpsc::Receiver<ServiceCommand>;
 
 async fn start_rpc_server(command_sink: ServiceCommandSink, socket_addr: SocketAddr) {
+    let reflection = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(protos::FILE_DESCRIPTOR_SET)
+        .build()
+        .unwrap();
+
     let server = rpc_server::RpcServer::new(command_sink);
     let server = protos::development_server::DevelopmentServer::new(server);
 
     let _server = tonic::transport::Server::builder()
+        .add_service(reflection)
         .add_service(server)
         .serve(socket_addr)
         .await;
 }
 
 async fn map_request(req: Request<Body>) -> HttpRequest {
+    trace!("mapping incoming request {:#?}", &req);
     use function_service::types::Method;
 
     let method = match req.method().as_str() {
@@ -73,6 +89,7 @@ async fn map_request(req: Request<Body>) -> HttpRequest {
 }
 
 fn map_response(response: HttpResponse) -> Response<Body> {
+    trace!("mapping outgoing response {:#?}", response);
     let mut builder = Response::builder().status(response.status);
 
     let body = Body::from(response.body);
@@ -105,9 +122,12 @@ type HttpFunctionComponent = BoxService<Request<Body>, Response<Body>, BoxError>
 
 type HttpFunctionComponentMaker = BoxCloneService<(), HttpFunctionComponent, BoxError>;
 
-fn build_http_function_component_svc() -> HttpFunctionComponentMaker {
+fn new_http_component_maker(
+    component_maybe: Option<function_service::service::WasmComponent>,
+) -> HttpFunctionComponentMaker {
     let store_producer = wasmtime_components::runtime::make_store_producer();
-    let base_component = function_service::service::empty_base_function_component();
+    let base_component =
+        component_maybe.unwrap_or(function_service::service::empty_base_function_component());
 
     new_function_service_maker(base_component, store_producer)
         .map_response(|v| map_component_response(v))
@@ -120,20 +140,54 @@ async fn start_development_server(
 ) {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let mut function_service_maker = build_http_function_component_svc();
+    let function_service_maker = Arc::new(Mutex::new(new_http_component_maker(None)));
+    let function_service_maker_rpc_handle = function_service_maker.clone();
 
     let component_host_server = Server::bind(&socket_addr)
         .serve(make_service_fn(move |v: &AddrStream| {
-            info!("http connection {:#?}", v);
-            function_service_maker.call(())
+            trace!("http connection {:#?}", v);
+            let cloned_maker = function_service_maker.clone();
+            async move {
+                let mut maker = cloned_maker.lock().await;
+                maker.call(()).await
+            }
         }))
         .with_graceful_shutdown(async move {
             let _ = shutdown_rx.await;
         });
 
+    // Spawn the manager event loop
     let _ = tokio::spawn(async move {
-        while let Some(_command) = command_stream.recv().await {
-            // Handle Command
+        let cloned_maker = function_service_maker_rpc_handle.clone();
+        while let Some(command) = command_stream.recv().await {
+            let _ = match command {
+                ServiceCommand::SwapFunctionComponent {
+                    component_path,
+                    reply,
+                } => {
+                    let component_path = Path::new(&component_path);
+                    if !component_path.exists() || !component_path.is_file() {
+                        reply.send(Err(anyhow!("Component path doesn't exist or isn't a file. Did you specify the correct path?")));
+                    } else {
+                        match wasmtime_components::runtime::new_component_from_path(
+                            component_path.into(),
+                        ) {
+                            Ok(function_component) => {
+                                info!("attempting to take lock on maker");
+                                let mut locked_maker = cloned_maker.lock().await;
+                                info!("received lock on maker. Attempting to swap with new function component maker");
+                                let new_http_component_maker =
+                                    new_http_component_maker(Some(function_component));
+                                *locked_maker = new_http_component_maker;
+                                let _ = reply.send(Ok(()));
+                            }
+                            Err(e) => {
+                                let _ = reply.send(Err(anyhow!("Failed to create a component from path. Did you specify a valid wasm32-wasi component?, Error {:#?}", e)));
+                            }
+                        }
+                    }
+                }
+            };
         }
         let _ = shutdown_tx.send(());
     });
@@ -144,13 +198,20 @@ async fn start_development_server(
 
 pub(crate) mod protos {
     tonic::include_proto!("development");
+
+    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
+        tonic::include_file_descriptor_set!("development_descriptor");
 }
 
 mod rpc_server {
     use crate::{
-        protos::{development_server::Development, EchoReply, EchoRequest},
-        ServiceCommandSink,
+        protos::{
+            development_server::Development, DeployReply, DeployRequest, EchoReply, EchoRequest,
+        },
+        ServiceCommand, ServiceCommandSink,
     };
+    use log::info;
+    use tokio::sync::oneshot;
     use tonic::Response;
 
     #[derive(Debug)]
@@ -172,6 +233,30 @@ mod rpc_server {
         ) -> Result<Response<EchoReply>, tonic::Status> {
             Ok(Response::new(EchoReply {
                 message: request.into_inner().message,
+            }))
+        }
+
+        async fn deploy_component(
+            &self,
+            request: tonic::Request<DeployRequest>,
+        ) -> Result<Response<DeployReply>, tonic::Status> {
+            info!("received deploy_component cmd");
+            let request = request.into_inner();
+            let component_path = request.component_path;
+
+            let (reply, rx) = oneshot::channel();
+            let cmd = ServiceCommand::SwapFunctionComponent {
+                component_path,
+                reply,
+            };
+            let _ = self.command_sink.send(cmd).await;
+
+            if let Ok(Err(e)) = rx.await {
+                return Err(tonic::Status::from_error(e.into()));
+            }
+
+            Ok(Response::new(DeployReply {
+                message: "Ok".into(),
             }))
         }
     }

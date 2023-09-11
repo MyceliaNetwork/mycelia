@@ -31,7 +31,7 @@ impl Guest for TestFunction {
         let body = if req.body.len() > 0 {
             req.body
         } else {
-            "hello world".into()
+            "Hello World!".into()
         };
 
         HttpResponse {
