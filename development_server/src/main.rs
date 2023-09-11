@@ -1,6 +1,6 @@
 mod component_service;
 
-use std::{convert::Infallible, net::SocketAddr};
+use std::net::SocketAddr;
 
 use clap::Parser;
 use function_service::{
@@ -12,11 +12,7 @@ use hyper::{
     body::HttpBody, server::conn::AddrStream, service::make_service_fn, Body, Request, Response,
     Server,
 };
-use log::{warn, info};
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use wasmtime_components::runtime::StoreProducer;
+use log::{info, warn};
 
 use tower::{
     util::{BoxCloneService, BoxService},
