@@ -603,6 +603,7 @@ dependencies = [
 name = "development_server"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "function_service",
  "hyper",
  "prost",

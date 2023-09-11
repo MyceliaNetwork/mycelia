@@ -2,8 +2,11 @@ mod component_service;
 
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
+use clap::Parser;
 use function_service::{
-    service::{new_function_service_maker, FunctionComponentService},
+    service::{
+        new_function_service_maker, FunctionComponentService, FunctionComponentServiceMaker,
+    },
     types::{HttpRequest, HttpResponse},
 };
 use hyper::service::Service as HyperService;
@@ -17,7 +20,11 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::Mutex;
-use tower::{BoxError, Service, ServiceExt};
+use tower::{
+    builder,
+    util::{BoxCloneService, BoxService},
+    BoxError, MakeService, Service, ServiceBuilder, ServiceExt,
+};
 
 async fn handle_function_request(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
     Ok(Response::new("hello world".into()))
@@ -30,7 +37,7 @@ async fn handle_rpc_request(_req: Request<Body>) -> Result<Response<Body>, Infal
 type ServiceCommandSink = tokio::sync::mpsc::Sender<()>;
 type ServiceCommandSource = tokio::sync::mpsc::Receiver<()>;
 
-async fn start_rpc_service(command_sink: ServiceCommandSink, socket_addr: SocketAddr) {
+async fn start_rpc_server(command_sink: ServiceCommandSink, socket_addr: SocketAddr) {
     let server = development_rpc_server::RpcServer::new(command_sink);
     let server = protos::development_server::DevelopmentServer::new(server);
 
@@ -114,51 +121,58 @@ impl Service<Request<Body>> for HttpService {
 
 async fn start_development_server(
     mut command_stream: ServiceCommandSource,
-    _socket_addr: SocketAddr,
+    socket_addr: SocketAddr,
 ) {
     let store_producer = wasmtime_components::runtime::make_store_producer();
     let base_component = function_service::service::empty_base_function_component()
         .expect("Failed to get a base component. Cannot continue");
 
-    let service_maker = Arc::new(Mutex::new(new_function_service_maker(
-        base_component,
-        store_producer,
-    )));
-    let component_host_addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let function_service_maker = new_function_service_maker(base_component, store_producer);
 
-    let make_svc = make_service_fn(|socket: &AddrStream| {
-        let _remote_addr = socket.remote_addr();
-        let service_maker = service_maker.clone();
-        async move {
-            let service_maker = service_maker.clone();
+    fn resolve_map_future(req: Request<Body>) -> HttpRequest {
+        tokio::task::block_in_place(|| {
+            let rt = tokio::runtime::Handle::current();
+            rt.block_on(map_request(req))
+        })
+    }
 
-            Ok::<_, BoxError>(service_fn(move |req: Request<Body>| {
-                let service_maker = service_maker.clone();
+    fn map_function_service(
+        service: FunctionComponentService,
+    ) -> BoxService<Request<Body>, Response<Body>, BoxError> {
+        let binding = service
+            .map_request(resolve_map_future)
+            .map_response(|resp| map_response(resp));
+        binding.boxed()
+    }
 
-                async move {
-                    let service_maker = service_maker.clone();
-                    let mut service_maker = service_maker.lock().await;
-                    let mut service = service_maker.ready().await?.call(()).await?;
-                    let response = service.ready().await?.call(map_request(req).await).await?;
-                    Ok::<_, BoxError>(map_response(response))
-                }
-            }))
-        }
-    });
+    let function_service_maker: BoxCloneService<
+        (),
+        BoxService<Request<Body>, Response<Body>, BoxError>,
+        BoxError,
+    > = function_service_maker
+        .map_response(|v| map_function_service(v))
+        .boxed_clone();
 
-    let (shutdown_tx, _shutdown_rx) = tokio::sync::oneshot::channel();
-    let _component_host_server = Server::bind(&component_host_addr).serve(make_svc);
-    //.with_graceful_shutdown(async move { let _ = shutdown_rx.await; });
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
-    let _server_handle = tokio::spawn(async move {
+    let mut function_service_maker = function_service_maker.boxed_clone();
+
+    let component_host_server = Server::bind(&socket_addr)
+        .serve(make_service_fn(move |v: &AddrStream| {
+            function_service_maker.call(())
+        }))
+        .with_graceful_shutdown(async move {
+            let _ = shutdown_rx.await;
+        });
+
+    let server_handle = tokio::spawn(async move {
         while let Some(_command) = command_stream.recv().await {
             // Handle Command
         }
-
         let _ = shutdown_tx.send(());
     });
-
-    //component_host_server.await;
+    component_host_server.await;
+    println!("component_host_server returned");
 }
 
 pub(crate) mod protos {
@@ -196,20 +210,44 @@ pub mod development_rpc_server {
     }
 }
 
-mod development_component_server {}
+mod cmd {
+    use clap::Parser;
+
+    /// Mycelia Development Server
+    #[derive(Parser, Debug)]
+    #[command(author, version, about, long_about = None)]
+    pub struct Args {
+        /// Custom base function component path
+        #[arg(short, long)]
+        function_component: Option<String>,
+    }
+}
 
 #[tokio::main]
 async fn main() {
+    let args = crate::cmd::Args::parse();
+
     // Component Host
 
     // Rpc Host
     let rpc_host_addr = SocketAddr::from(([127, 0, 0, 1], 50051));
+    let http_host_addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
     // Command Sink / Source
-    let (command_sink, _command_source) = tokio::sync::mpsc::channel(10);
-    let rpc_server_future = start_rpc_service(command_sink, rpc_host_addr);
+    let (command_sink, command_source) = tokio::sync::mpsc::channel(10);
+
+    let rpc_server_future = start_rpc_server(command_sink, rpc_host_addr);
+    let http_server_future = start_development_server(command_source, http_host_addr);
 
     let rpc_server_task_handle = tokio::spawn(rpc_server_future);
+    let http_service_task_handle = tokio::spawn(http_server_future);
 
-    let _ = rpc_server_task_handle.await;
+    tokio::select! {
+        _ = rpc_server_task_handle => {
+            println!("operation timed out");
+        }
+        _ = http_service_task_handle => {
+            println!("operation completed");
+        }
+    }
 }

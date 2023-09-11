@@ -13,6 +13,7 @@ tonic = { version = "0.10.0" }
 prost = "0.12"
 function_service = {"path" = "../services/function"}
 wasmtime_components = {path = "../wasmtime_components"}
+clap = { version = "4.4.2", features = ["derive"] }
 
 [build-dependencies]
 tonic-build = "0.10.0"

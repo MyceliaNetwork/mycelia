@@ -86,6 +86,10 @@ pub mod runtime {
     pub fn new_component_from_path(path: PathBuf) -> anyhow::Result<Component> {
         Component::from_file(&ENGINE, path)
     }
+
+    pub fn new_component_from_bytes(b : &[u8]) -> anyhow::Result<Component> {
+        Component::from_binary(&ENGINE, b)
+    }
 }
 
 #[cfg(test)]

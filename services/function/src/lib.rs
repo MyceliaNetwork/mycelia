@@ -28,6 +28,7 @@ pub mod service {
 
     use tokio::sync::{oneshot, Mutex};
     use tokio::task::JoinHandle;
+    use tower::util::BoxCloneService;
     use tower::{service_fn, ServiceExt};
     use tower::{util::BoxService, BoxError, Service};
     use wasmtime::component::{Component, Linker};
@@ -164,10 +165,13 @@ pub mod service {
 
     // TODO the produced maker should take a request which can be used to assure
     // the caller is producing the correct guest instances.
+    pub type FunctionComponentServiceMaker =
+        BoxCloneService<(), FunctionComponentService, BoxError>;
+
     pub fn new_function_service_maker(
         base_component: Component,
         store_producer: wasmtime_components::runtime::StoreProducer,
-    ) -> BoxService<(), FunctionComponentService, BoxError> {
+    ) -> FunctionComponentServiceMaker {
         let linker = Arc::new(Mutex::new(new_linker()));
 
         let future_producer = move |_v: ()| {
@@ -194,13 +198,13 @@ pub mod service {
 
         let svc = service_fn(future_producer);
 
-        return BoxService::new(svc);
+        return BoxCloneService::new(svc);
     }
 
     pub fn empty_base_function_component() -> anyhow::Result<Component> {
-        wasmtime_components::runtime::new_component_from_path(
-            "../../components/function-component.wasm".into(),
-        )
+        let bytes = include_bytes!("../../../components/function-component.wasm");
+
+        wasmtime_components::runtime::new_component_from_bytes(bytes)
     }
 
     #[cfg(test)]
