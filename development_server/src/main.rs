@@ -129,6 +129,9 @@ async fn start_development_server(
 
     let function_service_maker = new_function_service_maker(base_component, store_producer);
 
+    // this is clearly abusing `map_request`
+    // tower should have a way to "place a service"
+    // in front of another one
     fn resolve_map_future(req: Request<Body>) -> HttpRequest {
         tokio::task::block_in_place(|| {
             let rt = tokio::runtime::Handle::current();
@@ -217,7 +220,7 @@ mod cmd {
     #[derive(Parser, Debug)]
     #[command(author, version, about, long_about = None)]
     pub struct Args {
-        /// Custom base function component path
+        /// path to a function component
         #[arg(short, long)]
         function_component: Option<String>,
     }
