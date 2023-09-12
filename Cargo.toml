@@ -1,9 +1,23 @@
 [workspace]
 
 members = [
+  # Tooling
   "cli",
-  "runtime",
-  "guests/function"
+  "development_server",
+  "wasmtime_components",
+
+  # Services
+  "services/function",
+
+  # Guests
+  "guests/function",
 ]
 
 resolver= "2"
+
+[workspace.dependencies]
+anyhow = "1.0.75"
+async-trait = "0.1.73"
+log = "0.4.20"
+env_logger = "0.9.0"
+

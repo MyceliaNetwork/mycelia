@@ -1,0 +1,22 @@
+[package]
+name = "development_server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hyper = { version = "0.14.27", features = ["full"] }
+tokio = { version = "1.32.0", features = ["full"] }
+tower = { version = "0.4.13", features = ["full"] }
+tonic = { version = "0.10.0" }
+prost = "0.12"
+function_service = { "path" = "../services/function" }
+wasmtime_components = { path = "../wasmtime_components" }
+clap = { version = "4.4.2", features = ["derive"] }
+log = { workspace = true }
+env_logger = { workspace = true }
+anyhow = { workspace = true }
+tonic-reflection = "0.10.0"
+[build-dependencies]
+tonic-build = "0.10.0"

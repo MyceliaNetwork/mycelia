@@ -24,3 +24,14 @@ In the lliekly event that's not enough context, the repo previously hosting this
 
 ### `Questions`
 1. Whats the lifetime behavior of resources??
+
+
+
+/// Todo..
+- Lock more dep versions in workspace.deps
+
+- Build `FunctionComponentService`
+    - a thing that takes invocation requests and produces responses
+      wrapped in a tower service
+- ^ take above into `development_server` :D
+

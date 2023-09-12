@@ -1,13 +1,15 @@
 [package]
-name = "runtime"
+name = "function_service"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.75"
-async-trait = "0.1.73"
+anyhow = { workspace = true }
 tokio = { version = "1.32.0", features = ["full"] }
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main", features = ["component-model"] }
 wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main"}
+tower = { version = "0.4.13", features = ["full"] }
+wasmtime_components = {path = "../../wasmtime_components"}
+http = "0.2.9"

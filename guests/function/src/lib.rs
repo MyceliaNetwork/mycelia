@@ -16,6 +16,12 @@ wit_bindgen::generate!({
     },
 });
 
+// Todo produce exports..
+
+// Todo check how the macro is being expanded
+// We might actually be able to provide this via a lib
+// Using wit-bindgen :(
+
 // A Simple Test Function that echos what
 // is passed to it. Or, returns "hello world"
 struct TestFunction;
@@ -25,7 +31,7 @@ impl Guest for TestFunction {
         let body = if req.body.len() > 0 {
             req.body
         } else {
-            "hello world".into()
+            "Hello World!".into()
         };
 
         HttpResponse {
