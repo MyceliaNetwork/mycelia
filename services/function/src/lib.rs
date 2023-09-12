@@ -159,9 +159,7 @@ pub mod service {
     // Notes:
     // 1. We might need to use a precompiled `Component`. Not sure if creating the `Component`
     // produces a precompiled on out of the box.
-    // 2.
-
-    // Use caution when moving the created instance around. Inproper sharing will
+    // 2. Use caution when moving the created instance around. Inproper sharing will
     // lead to downsteam errors in guest code and leaking VM resources.
 
     // TODO the produced maker should take a request which can be used to assure
