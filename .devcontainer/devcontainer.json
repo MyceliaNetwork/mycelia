@@ -1,35 +1,36 @@
 {
-	"name": "Codespaces Rust Starter",
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"cschleiden.vscode-github-actions",
-				"ms-vsliveshare.vsliveshare",
-				"matklad.rust-analyzer",
-				"serayuzgur.crates",
-				"vadimcn.vscode-lldb",
-				"rust-lang.rust-analyzer",
-				"bytecodealliance.wit-idl"
-			],
-			"settings": {
-				"editor.formatOnSave": true,
-				"terminal.integrated.shell.linux": "/usr/bin/zsh",
-				"files.exclude": {
-					"**/CODE_OF_CONDUCT.md": true,
-					"**/LICENSE": true
-				}
-			}
-		}
-	},
-	"dockerFile": "Dockerfile",
-	"features": {
-		"ghcr.io/devcontainers/features/sshd:1": {
-			"version": "latest"
-		}
-	},
-	"hostRequirements": {
-		"cpus": 4,
-		"memory": "16gb",
-		"storage": "64gb"
-	}
+  "name": "Codespaces Rust Starter",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "cschleiden.vscode-github-actions",
+        "ms-vsliveshare.vsliveshare",
+        "matklad.rust-analyzer",
+        "serayuzgur.crates",
+        "vadimcn.vscode-lldb",
+        "rust-lang.rust-analyzer",
+        "bytecodealliance.wit-idl",
+        "tamasfe.even-better-toml"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "terminal.integrated.shell.linux": "/usr/bin/zsh",
+        "files.exclude": {
+          "**/CODE_OF_CONDUCT.md": true,
+          "**/LICENSE": true
+        }
+      }
+    }
+  },
+  "dockerFile": "Dockerfile",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "64gb"
+  }
 }
