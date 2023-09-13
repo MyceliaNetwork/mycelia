@@ -1,4 +1,12 @@
 use clap::{Parser, Subcommand};
+use std::{
+    env,
+    io::Error,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+type DynError = Box<dyn std::error::Error>;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -10,9 +18,28 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Adds files to myapp
-    // Add { name: Option<String> },
     Start,
+}
+
+fn start() -> Result<(), DynError> {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let status = Command::new(cargo)
+        .current_dir(project_root())
+        .args(&["run", "--package=development_server"])
+        .status()?;
+
+    if !status.success() {
+        Err(format!(
+            "
+Starting development_server failed.
+
+Command: `cargo run --package=development_server`
+Status code: {}",
+            status.code().unwrap()
+        ))?;
+    }
+
+    Ok(())
 }
 
 fn main() {
@@ -21,11 +48,16 @@ fn main() {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        // Commands::Add { name } => {
-        //     println!("'myapp add' was used, name is: {name:?}")
-        // }
         Commands::Start => {
-            println!("'myapp start' was used")
+            start();
         }
     }
+}
+
+fn project_root() -> PathBuf {
+    Path::new(&env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(1)
+        .unwrap()
+        .to_path_buf()
 }
