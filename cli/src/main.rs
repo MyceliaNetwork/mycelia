@@ -17,6 +17,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Starts the mycelia development server
     Start,
 }
 
