@@ -55,7 +55,7 @@ pub mod service {
 
     struct InnerService {
         request_sink: RequestSink,
-        handle: JoinHandle<()>,
+        _handle: JoinHandle<()>,
     }
 
     impl Into<FunctionComponentService> for InnerService {
@@ -102,7 +102,7 @@ pub mod service {
 
             Self {
                 request_sink,
-                handle,
+                _handle: handle,
             }
         }
     }

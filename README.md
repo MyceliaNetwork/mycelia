@@ -10,6 +10,15 @@ cargo xtask build
 
 NOTE: We opted for [cargo-xtask](https://github.com/matklad/cargo-xtask) because Cargo build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
 
+## Development Server
+
+```sh
+RUST_LOG=info cargo run --package development_server
+```
+
+### Logging
+
+We use [env_logger](https://docs.rs/env_logger/0.10.0/env_logger/) for logging. Please see their documentation for more information on setting custom log levels, filtering, and more.
 ## Community & Contributing & Help
 
 Come join our [Discord](https://discord.gg/hKMtmdMJ)

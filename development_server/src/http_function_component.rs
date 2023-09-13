@@ -4,7 +4,7 @@ use anyhow::anyhow;
 
 use function_service::{
     service::{
-        new_function_service_maker, FunctionComponentService, FunctionComponentServiceMaker,
+        new_function_service_maker, FunctionComponentService,
     },
     types::{HttpRequest, HttpResponse},
 };
@@ -126,9 +126,9 @@ fn new_http_component_maker(
 
 /// Spawn a new tokio task to listen for incoming ServiceCommands.
 /// This task runs alongside the http server acting as a manager of sorts.
-async fn run_server_command_loop(
+fn run_server_command_loop(
     mut command_stream: crate::rpc::ServiceCommandSource,
-    mut shutdown_tx: oneshot::Sender<()>,
+    shutdown_tx: oneshot::Sender<()>,
     function_service_maker: Arc<Mutex<HttpFunctionComponentMaker>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -170,7 +170,7 @@ async fn run_server_command_loop(
 }
 
 pub(crate) async fn start_development_server(
-    mut command_stream: crate::rpc::ServiceCommandSource,
+    command_stream: crate::rpc::ServiceCommandSource,
     socket_addr: SocketAddr,
 ) {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
