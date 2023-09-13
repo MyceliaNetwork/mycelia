@@ -59,9 +59,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15c4c2c83f81532e5845a733998b6971faca23490340a418e9b72a3ec9de12ea"
+checksum = "b84bf0a05bbb2a83e5eb6fa36bb6e87baa08193c35ff52bbf6b38d8af2890e46"
 
 [[package]]
 name = "anstyle-parse"
@@ -370,12 +370,12 @@ dependencies = [
 
 [[package]]
 name = "clap-cargo"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25122ca6ebad5f53578c26638afd9f0160426969970dc37ec6c363ff6b082ebd"
+checksum = "383f21342a464d4af96e9a4cad22a0b4f2880d4a5b3bbf5c9654dd1d9a224ee4"
 dependencies = [
+ "anstyle",
  "clap",
- "doc-comment",
 ]
 
 [[package]]
@@ -414,6 +414,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "clap-cargo",
+ "development_server",
 ]
 
 [[package]]
@@ -679,12 +680,6 @@ dependencies = [
  "redox_users",
  "winapi",
 ]
-
-[[package]]
-name = "doc-comment"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "either"
