@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use std::{
     env,
-    io::Error,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -33,7 +32,7 @@ fn start() -> Result<(), DynError> {
             "
 Starting development_server failed.
 
-Command: `cargo run --package=development_server`
+Command: `cargo run start`
 Status code: {}",
             status.code().unwrap()
         ))?;
@@ -43,15 +42,23 @@ Status code: {}",
 }
 
 fn main() {
+    if let Err(e) = try_main() {
+        eprintln!("{}", e);
+        std::process::exit(-1);
+    }
+}
+
+fn try_main() -> Result<(), DynError> {
     let cli = Cli::parse();
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
         Commands::Start => {
-            start();
+            start()?;
         }
     }
+    Ok(())
 }
 
 fn project_root() -> PathBuf {
