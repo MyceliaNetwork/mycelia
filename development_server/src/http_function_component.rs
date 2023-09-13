@@ -3,7 +3,9 @@ use std::{net::SocketAddr, path::Path, sync::Arc};
 use anyhow::anyhow;
 
 use function_service::{
-    service::{new_function_service_maker, FunctionComponentService},
+    service::{
+        new_function_service_maker, FunctionComponentService, FunctionComponentServiceMaker,
+    },
     types::{HttpRequest, HttpResponse},
 };
 use hyper::service::Service as HyperService;
@@ -13,14 +15,17 @@ use hyper::{
 };
 use log::{info, trace, warn};
 
-use tokio::sync::Mutex;
+use tokio::{
+    sync::{oneshot, Mutex},
+    task::JoinHandle,
+};
 use tower::{
     util::{BoxCloneService, BoxService},
     BoxError, ServiceExt,
 };
 
 /// Map a hyper request to the mycelia::execution::HttpRequest type
-pub(crate) async fn map_request(req: Request<Body>) -> HttpRequest {
+async fn map_request(req: Request<Body>) -> HttpRequest {
     trace!("mapping incoming request {:#?}", &req);
     use function_service::types::Method;
 
@@ -81,7 +86,7 @@ pub(crate) fn map_response(response: HttpResponse) -> Response<Body> {
 // this is clearly abusing `map_request`
 // tower should have a way to "place a service"
 // in front of another one
-pub(crate) fn map_http_request(req: Request<Body>) -> HttpRequest {
+fn map_http_request(req: Request<Body>) -> HttpRequest {
     tokio::task::block_in_place(|| {
         let rt = tokio::runtime::Handle::current();
         rt.block_on(map_request(req))
@@ -90,7 +95,7 @@ pub(crate) fn map_http_request(req: Request<Body>) -> HttpRequest {
 
 /// Decorates a FunctionComponentService with request response
 /// mappers to allow it to handle incoming hyper http Request / Response
-pub(crate) fn map_component_response(service: FunctionComponentService) -> HttpFunctionComponent {
+fn map_component_response(service: FunctionComponentService) -> HttpFunctionComponent {
     let binding = service
         .map_request(map_http_request)
         .map_response(|resp| map_response(resp));
@@ -103,7 +108,11 @@ type HttpFunctionComponentMaker = BoxCloneService<(), HttpFunctionComponent, Box
 
 /// Helper to produce new HttpFunctionComponentMakers
 /// take note that this is where we're actually apply `map_component_response`
-pub(crate) fn new_http_component_maker(
+/// to map to and from the wasm component types and the hyper service types
+///
+/// # Arguments
+/// * `component_maybe` - An optional component the maker should produce
+fn new_http_component_maker(
     component_maybe: Option<function_service::service::WasmComponent>,
 ) -> HttpFunctionComponentMaker {
     let store_producer = wasmtime_components::runtime::make_store_producer();
@@ -115,31 +124,17 @@ pub(crate) fn new_http_component_maker(
         .boxed_clone()
 }
 
-pub(crate) async fn start_development_server(
+/// Spawn a new tokio task to listen for incoming ServiceCommands.
+/// This task runs alongside the http server acting as a manager of sorts.
+async fn run_server_command_loop(
     mut command_stream: crate::rpc::ServiceCommandSource,
-    socket_addr: SocketAddr,
-) {
-    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    mut shutdown_tx: oneshot::Sender<()>,
+    function_service_maker: Arc<Mutex<HttpFunctionComponentMaker>>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let cloned_maker = function_service_maker.clone();
 
-    let function_service_maker = Arc::new(Mutex::new(new_http_component_maker(None)));
-    let function_service_maker_rpc_handle = function_service_maker.clone();
-
-    let component_host_server = Server::bind(&socket_addr)
-        .serve(make_service_fn(move |v: &AddrStream| {
-            trace!("http connection {:#?}", v);
-            let cloned_maker = function_service_maker.clone();
-            async move {
-                let mut maker = cloned_maker.lock().await;
-                maker.call(()).await
-            }
-        }))
-        .with_graceful_shutdown(async move {
-            let _ = shutdown_rx.await;
-        });
-
-    // Spawn the manager event loop
-    let _ = tokio::spawn(async move {
-        let cloned_maker = function_service_maker_rpc_handle.clone();
+        // Command loop
         while let Some(command) = command_stream.recv().await {
             let _ = match command {
                 crate::rpc::ServiceCommand::SwapFunctionComponent {
@@ -171,8 +166,42 @@ pub(crate) async fn start_development_server(
             };
         }
         let _ = shutdown_tx.send(());
-    });
-    let _ = component_host_server.await;
+    })
+}
 
-    warn!("component_host_server returned");
+pub(crate) async fn start_development_server(
+    mut command_stream: crate::rpc::ServiceCommandSource,
+    socket_addr: SocketAddr,
+) {
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+
+    let function_service_maker = Arc::new(Mutex::new(new_http_component_maker(None)));
+
+    // Notice we pass a ref to the maker.
+    // This allows us to "hot swap" the maker
+    let command_loop_handle =
+        run_server_command_loop(command_stream, shutdown_tx, function_service_maker.clone());
+
+    // Create the server future using the http_commonent_maker to handle all incoming connections
+    let component_host_server = Server::bind(&socket_addr)
+        .serve(make_service_fn(move |v: &AddrStream| {
+            trace!("http connection {:#?}", v);
+            let cloned_maker = function_service_maker.clone();
+            async move {
+                let mut maker = cloned_maker.lock().await;
+                maker.call(()).await
+            }
+        }))
+        .with_graceful_shutdown(async move {
+            let _ = shutdown_rx.await;
+        });
+
+    tokio::select! {
+      _ = component_host_server => {
+        warn!("component_host_server returned");
+      },
+      _ = command_loop_handle => {
+        warn!("command loop handle returned");
+      }
+    };
 }

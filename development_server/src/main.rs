@@ -57,5 +57,5 @@ async fn main() {
         _ = http_server => {
             warn!("http server task completed");
         }
-    }
+    };
 }
