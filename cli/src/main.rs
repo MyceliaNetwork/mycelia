@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::{
     env,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 
 type DynError = Box<dyn std::error::Error>;
@@ -43,29 +43,27 @@ struct Cli {
 }
 
 fn start(address: &String, port: &u16, open_browser: &bool) -> Result<(), DynError> {
-    println!(
-        "Starting development server on http://{}:{}? {}",
-        address, port, open_browser
-    );
+    println!("Starting development server on http://{}:{}", address, port);
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
         .args(&["run", "--package=development_server"])
-        .status()?;
+        .stdout(Stdio::piped())
+        .spawn();
 
-    if !status.success() {
-        Err(format!(
-            "
-Starting development_server failed.
+    //     if !status.success() {
+    //         Err(format!(
+    //             "
+    // Starting development_server failed.
 
-Command: `cargo run start`
-Status code: {}",
-            status.code().unwrap()
-        ))?;
-    } else {
-        println!("Development server started");
-    }
+    // Command: `cargo run start`
+    // Status code: {}",
+    //             status.code().unwrap()
+    //         ))?;
+    //     } else {
+    //         println!("Development server started");
+    //     }
 
     if *open_browser {
         let path = format!("http://{}:{}", address, port);
@@ -76,6 +74,10 @@ Status code: {}",
         }
     }
 
+    Ok(())
+}
+
+fn stop() -> Result<(), DynError> {
     Ok(())
 }
 
@@ -100,7 +102,7 @@ fn try_main() -> Result<(), DynError> {
             start(address, port, open_browser)?;
         }
         Commands::Stop => {
-            println!("TODO: stop");
+            stop()?;
         }
         Commands::Deploy => {
             println!("TODO: deploy");
