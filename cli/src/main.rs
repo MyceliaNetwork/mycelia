@@ -1,3 +1,7 @@
+// Usage:
+//
+// `cargo run --package cli`
+
 use std::{
     env,
     io::Error,
