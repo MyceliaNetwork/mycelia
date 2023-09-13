@@ -8,7 +8,6 @@ mod bindgen {
 }
 
 pub mod types {
-
     pub type HttpRequest = crate::bindgen::mycelia::execution::types::HttpRequest;
     pub type HttpResponse = crate::bindgen::mycelia::execution::types::HttpResponse;
     pub type Method = crate::bindgen::mycelia::execution::types::Method;
