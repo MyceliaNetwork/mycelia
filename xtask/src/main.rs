@@ -91,7 +91,6 @@ fn guests() -> Vec<Guest> {
 }
 
 fn build() -> Result<(), DynError> {
-    let _ = fs::remove_dir_all(&dir_target());
     fs::create_dir_all(&dir_target())?;
     fs::create_dir_all(&dir_components())?;
 
