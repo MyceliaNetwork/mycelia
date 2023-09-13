@@ -8,6 +8,32 @@ Open Source Application Stack &amp; PaaS
 cargo xtask build
 ```
 
+## CLI Usage
+
+### General
+
+```sh
+cargo run
+```
+
+### Start Development Server
+
+```sh
+cargo run start
+```
+
+### Stop Development Server
+
+```sh
+cargo run stop
+```
+
+### Deploy
+
+```sh
+cargo run deploy
+```
+
 NOTE: We opted for [cargo-xtask](https://github.com/matklad/cargo-xtask) because Cargo build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
 
 ## Development Server
