@@ -1,20 +1,31 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
-#[derive(Parser)] // requires `derive` feature
-#[command(name = "cargo")]
-#[command(bin_name = "cargo")]
-enum CargoCli {
-    Start(StartArgs),
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+#[command(propagate_version = true)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
 }
 
-#[derive(clap::Args)]
-#[command(author, version, about, long_about = None)]
-struct StartArgs {
-    #[arg(long)]
-    manifest_path: Option<std::path::PathBuf>,
+#[derive(Subcommand)]
+enum Commands {
+    /// Adds files to myapp
+    // Add { name: Option<String> },
+    Start,
 }
 
 fn main() {
-    let CargoCli::Start(args) = CargoCli::parse();
-    println!("{:?}", args.manifest_path);
+    let cli = Cli::parse();
+
+    // You can check for the existence of subcommands, and if found use their
+    // matches just as you would the top level cmd
+    match &cli.command {
+        // Commands::Add { name } => {
+        //     println!("'myapp add' was used, name is: {name:?}")
+        // }
+        Commands::Start => {
+            println!("'myapp start' was used")
+        }
+    }
 }
