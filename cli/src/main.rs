@@ -7,7 +7,34 @@ use std::{
 
 type DynError = Box<dyn std::error::Error>;
 
-#[derive(Parser)]
+#[derive(Debug, Subcommand)]
+enum Commands {
+    /// Start the Mycelia development server
+    Start {
+        /// The address to listen on.
+        /// Default: localhost
+        /// TODO: add support to override (both here and in the development_server)
+        #[clap(short, long, default_value = "localhost")]
+        address: String,
+        /// The port to listen on.
+        /// Default: 3001
+        /// TODO: add support to override (both here and in the development_server)
+        #[clap(short, long, default_value = "3001")]
+        port: u16,
+        /// Open the development server in your default browser after starting.
+        /// Default: true
+        /// Possible values: true, false
+        #[clap(short, long, default_value = "true")]
+        open_browser: bool,
+        // TODO: add browser override list
+    },
+    /// Stop the Mycelia development server
+    Stop,
+    /// Deploy your Mycelia project
+    Deploy,
+}
+
+#[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
@@ -15,13 +42,12 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(Subcommand)]
-enum Commands {
-    /// Starts the mycelia development server
-    Start,
-}
+fn start(address: &String, port: &u16, open_browser: &bool) -> Result<(), DynError> {
+    println!(
+        "Starting development server on http://{}:{}? {}",
+        address, port, open_browser
+    );
 
-fn start() -> Result<(), DynError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
@@ -37,6 +63,17 @@ Command: `cargo run start`
 Status code: {}",
             status.code().unwrap()
         ))?;
+    } else {
+        println!("Development server started");
+    }
+
+    if *open_browser {
+        let path = format!("http://{}:{}", address, port);
+
+        match open::that(&path) {
+            Ok(()) => println!("Opened '{}' successfully.", path),
+            Err(err) => eprintln!("An error occurred when opening '{}': {}", path, err),
+        }
     }
 
     Ok(())
@@ -55,10 +92,21 @@ fn try_main() -> Result<(), DynError> {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Commands::Start => {
-            start()?;
+        Commands::Start {
+            address,
+            port,
+            open_browser,
+        } => {
+            start(address, port, open_browser)?;
+        }
+        Commands::Stop => {
+            println!("TODO: stop");
+        }
+        Commands::Deploy => {
+            println!("TODO: deploy");
         }
     }
+
     Ok(())
 }
 
