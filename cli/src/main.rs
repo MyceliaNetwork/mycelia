@@ -7,12 +7,14 @@ use std::{
 
 // use tonic::{transport::Server, Request, Response, Status};
 
-use cli::greeter_client::GreeterClient;
-use cli::HelloRequest;
+// use cli::greeter_client::GreeterClient;
+// use cli::HelloRequest;
 
-pub mod cli {
-    tonic::include_proto!("cli");
+pub mod development {
+    tonic::include_proto!("development");
 }
+use crate::development::Empty;
+use development::development_client::DevelopmentClient;
 
 type DynError = Box<dyn std::error::Error>;
 
@@ -121,13 +123,11 @@ async fn stop(domain: &str, rpc_port: &u16) -> Result<(), Box<dyn std::error::Er
 async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     println!("Stopping development server");
     let address = format!("http://{}:{}", domain, rpc_port);
-    let mut client = GreeterClient::connect(address).await?;
+    let mut client = DevelopmentClient::connect(address).await?;
 
-    let request = tonic::Request::new(HelloRequest {
-        name: "hello".into(),
-    });
+    // let request = tonic::Request::new(StopServer {});
 
-    let response = client.say_hello(request).await?;
+    let response = client.stop_server(Empty {}).await?;
 
     println!("RESPONSE={:?}", response);
 
@@ -139,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = try_main().await {
         eprintln!("{}", e);
 
-        std::process::exit(-1);
+        // std::process::exit(-1);
     }
 
     Ok(())
