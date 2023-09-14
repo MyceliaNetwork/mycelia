@@ -1,0 +1,16 @@
+// FIXME: this is a copy of /development_server/proto/development.proto
+
+syntax = "proto3";
+package development;
+
+service Development{
+  rpc StopServer(Empty) returns (Empty);
+}
+
+message Empty {
+
+}
+
+message StopServer{
+
+}
