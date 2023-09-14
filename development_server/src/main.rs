@@ -38,6 +38,7 @@ async fn main() {
 
     let args = crate::cmd::Args::parse();
 
+    // TODO: pass domain as arg too
     let rpc_host_addr = SocketAddr::from(([127, 0, 0, 1], args.rpc_port.unwrap_or(50051)));
     let http_host_addr = SocketAddr::from(([127, 0, 0, 1], args.http_port.unwrap_or(3001)));
 

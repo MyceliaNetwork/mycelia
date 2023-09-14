@@ -5,22 +5,38 @@ use std::{
     process::{Command, Stdio},
 };
 
+// use tonic::{transport::Server, Request, Response, Status};
+
+use development::greeter_client::GreeterClient;
+use development::HelloRequest;
+
+pub mod development {
+    tonic::include_proto!("development");
+}
+
 type DynError = Box<dyn std::error::Error>;
 
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Start the Mycelia development server
     Start {
-        /// The address to listen on.
+        /// The domain to listen on.
         /// Default: localhost
         /// TODO: add support to override (both here and in the development_server)
         #[clap(short, long, default_value = "localhost")]
-        address: String,
-        /// The port to listen on.
+        domain: String,
+        /// The port http server should bind to.
         /// Default: 3001
         /// TODO: add support to override (both here and in the development_server)
         #[clap(short, long, default_value = "3001")]
-        port: u16,
+        http_port: u16,
+
+        /// The port rpc server should bind to
+        /// Default: 50051
+        /// TODO: add support to override (both here and in the development_server)
+        #[clap(short, long, default_value = "50051")]
+        rpc_port: u16,
+
         /// Open the development server in your default browser after starting.
         /// Default: true
         /// Possible values: true, false
@@ -42,31 +58,33 @@ struct Cli {
     command: Commands,
 }
 
-fn start(address: &String, port: &u16, open_browser: &bool) -> Result<(), DynError> {
-    println!("Starting development server on http://{}:{}", address, port);
+fn start(
+    domain: &String,
+    http_port: &u16,
+    rpc_port: &u16,
+    open_browser: &bool,
+) -> Result<(), DynError> {
+    // TODO: might wanna move these prints to the development_server
+    println!(
+        "Starting development server on http://{}:{}",
+        domain, http_port
+    );
+    println!("Starting rpc server on http://{}:{}", domain, rpc_port);
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let status = Command::new(cargo)
+    let _status = Command::new(cargo)
         .current_dir(project_root())
-        .args(&["run", "--package=development_server"])
+        .args(&[
+            "run",
+            "--package=development_server",
+            format!("--http_port={}", http_port).as_str(),
+            format!("--rpc_port={}", rpc_port).as_str(),
+        ])
         .stdout(Stdio::piped())
         .spawn();
 
-    //     if !status.success() {
-    //         Err(format!(
-    //             "
-    // Starting development_server failed.
-
-    // Command: `cargo run start`
-    // Status code: {}",
-    //             status.code().unwrap()
-    //         ))?;
-    //     } else {
-    //         println!("Development server started");
-    //     }
-
     if *open_browser {
-        let path = format!("http://{}:{}", address, port);
+        let path = format!("http://{}:{}", domain, http_port);
 
         match open::that(&path) {
             Ok(()) => println!("Opened '{}' successfully.", path),
@@ -77,32 +95,58 @@ fn start(address: &String, port: &u16, open_browser: &bool) -> Result<(), DynErr
     Ok(())
 }
 
-fn stop() -> Result<(), DynError> {
+async fn stop() -> Result<(), DynError> {
+    let mut client = GreeterClient::connect("http://[::1]:50051").await?;
+
+    let request = tonic::Request::new(HelloRequest {
+        name: "Tonic".into(),
+    });
+
+    let response = client.say_hello(request).await?;
+
+    println!("RESPONSE={:?}", response);
+
     Ok(())
 }
 
-fn main() {
-    if let Err(e) = try_main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if let Err(e) = try_main().await {
         eprintln!("{}", e);
+
+        let mut client = GreeterClient::connect("http://[::1]:50051").await?;
+
+        let request = tonic::Request::new(HelloRequest {
+            name: "Tonic".into(),
+        });
+
+        let response = client.say_hello(request).await?;
+
+        println!("RESPONSE={:?}", response);
+
         std::process::exit(-1);
     }
+
+    Ok(())
 }
 
-fn try_main() -> Result<(), DynError> {
+async fn try_main() -> Result<(), DynError> {
     let cli = Cli::parse();
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
         Commands::Start {
-            address,
-            port,
+            domain,
+            http_port,
+            rpc_port,
             open_browser,
         } => {
-            start(address, port, open_browser)?;
+            start(domain, http_port, rpc_port, open_browser)?;
         }
         Commands::Stop => {
-            stop()?;
+            // TODO: process Result
+            let _ = stop().await;
         }
         Commands::Deploy => {
             println!("TODO: deploy");

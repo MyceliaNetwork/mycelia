@@ -404,6 +404,10 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "open",
+ "prost",
+ "tokio",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
