@@ -8,7 +8,7 @@ Open Source Application Stack &amp; PaaS
 cargo run build
 ```
 
-NOTE: `cargo build` will fail because we use [xtask](https://rcore-os.cn/zCore/xtask/index.html#) to pre-process the wasm files before building the project.
+**IMPORTANT**: `cargo build` will fail because we use [cargo-xtask](https://github.com/matklad/cargo-xtask/) to build the ./components/ folder before building the project.
 
 ## CLI
 
