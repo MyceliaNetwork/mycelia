@@ -5,12 +5,14 @@ Open Source Application Stack &amp; PaaS
 ## Installation
 
 ```sh
-cargo xtask build
+cargo run build
 ```
 
-## CLI Usage
+NOTE: `cargo build` will fail because we use [xtask](https://rcore-os.cn/zCore/xtask/index.html#) to pre-process the wasm files before building the project.
 
-### General
+## CLI
+
+### Info
 
 ```sh
 cargo run
@@ -45,6 +47,7 @@ RUST_LOG=info cargo run --package development_server
 ### Logging
 
 We use [env_logger](https://docs.rs/env_logger/0.10.0/env_logger/) for logging. Please see their documentation for more information on setting custom log levels, filtering, and more.
+
 ## Community & Contributing & Help
 
 Come join our [Discord](https://discord.gg/hKMtmdMJ)

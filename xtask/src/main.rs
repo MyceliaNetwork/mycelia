@@ -97,6 +97,26 @@ fn build() -> Result<(), DynError> {
     for guest in guests() {
         build_wasm(&guest)?;
         build_component(&guest)?;
+        build_workspace()?;
+    }
+
+    Ok(())
+}
+
+fn build_workspace() -> Result<(), DynError> {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let status = Command::new(cargo)
+        .current_dir(project_root())
+        .args(&["build", "--workspace"])
+        .status()?;
+
+    if !status.success() {
+        Err(format!(
+            "`cargo build --workspace` failed.
+
+Status code: {}",
+            status.code().unwrap()
+        ))?;
     }
 
     Ok(())

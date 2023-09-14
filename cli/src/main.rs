@@ -11,7 +11,7 @@ use std::{
 // use cli::HelloRequest;
 
 pub mod development {
-    tonic::include_proto!("development");
+    tonic::include_proto!("cli");
 }
 use crate::development::Empty;
 use development::development_client::DevelopmentClient;
@@ -20,6 +20,9 @@ type DynError = Box<dyn std::error::Error>;
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    /// Build the entire Mycelia project
+    /// Shortcut for: `cargo build --workspace && cargo xtask build`
+    Build,
     /// Start the Mycelia development server
     Start {
         /// The domain to listen on.
@@ -70,6 +73,25 @@ enum Commands {
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+}
+
+fn build() -> Result<(), DynError> {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let status = Command::new(cargo)
+        .current_dir(project_root())
+        .args(&["xtask", "build"])
+        .status()?;
+
+    if !status.success() {
+        Err(format!(
+            "`cargo xtask build` failed.
+
+    Status code: {}",
+            status.code().unwrap()
+        ))?;
+    }
+
+    Ok(())
 }
 
 fn start(
@@ -151,6 +173,9 @@ async fn try_main() -> Result<(), DynError> {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
+        Commands::Build => {
+            build()?;
+        }
         Commands::Start {
             domain,
             http_port,
@@ -160,7 +185,6 @@ async fn try_main() -> Result<(), DynError> {
             start(domain, http_port, rpc_port, open_browser)?;
         }
         Commands::Stop { domain, rpc_port } => {
-            // TODO: process Result
             let _ = stop(domain, rpc_port).await;
         }
         Commands::Deploy => {
