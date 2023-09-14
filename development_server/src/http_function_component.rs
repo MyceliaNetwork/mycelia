@@ -133,7 +133,6 @@ fn run_server_command_loop(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let cloned_maker = function_service_maker.clone();
-
         // Command loop
         while let Some(command) = command_stream.recv().await {
             let _ = match command {
@@ -163,9 +162,13 @@ fn run_server_command_loop(
                         }
                     }
                 }
+                crate::rpc::ServiceCommand::StopServer { reply } => {
+                    let _ = shutdown_tx.send(());
+                    let _ = reply.send(Ok(()));
+                    break;
+                },
             };
         }
-        let _ = shutdown_tx.send(());
     })
 }
 

@@ -16,13 +16,16 @@ pub enum ServiceCommand {
         component_path: String,
         reply: oneshot::Sender<anyhow::Result<()>>,
     },
+    StopServer {
+        reply: oneshot::Sender<anyhow::Result<()>>,
+    },
 }
 
 pub type ServiceCommandSink = tokio::sync::mpsc::Sender<ServiceCommand>;
 pub type ServiceCommandSource = tokio::sync::mpsc::Receiver<ServiceCommand>;
 
 use crate::protos::{
-    development_server::Development, DeployReply, DeployRequest, EchoReply, EchoRequest,
+    development_server::Development, DeployReply, DeployRequest, EchoReply, EchoRequest, Empty
 };
 
 #[derive(Debug)]
@@ -69,6 +72,19 @@ impl Development for RpcServer {
         Ok(tonic::Response::new(DeployReply {
             message: "Ok".into(),
         }))
+    }
+
+    async fn stop_server(
+        &self,
+        _request: tonic::Request<Empty>,
+    ) -> std::result::Result<tonic::Response<Empty>, tonic::Status> {
+        let (reply, rx) = oneshot::channel();
+
+        let _ = self.command_sink.send(ServiceCommand::StopServer { reply }).await;
+        match rx.await {
+            Ok(Ok(())) => Ok(tonic::Response::new(Empty{})),
+            _ => Err(tonic::Status::from_error("Failed to stop server".into())),
+        }
     }
 }
 

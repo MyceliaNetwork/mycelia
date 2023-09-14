@@ -4,6 +4,11 @@ package development;
 service Development {
   rpc Echo(EchoRequest) returns (EchoReply) {};
   rpc DeployComponent(DeployRequest) returns (DeployReply) {};
+  rpc StopServer(Empty) returns (Empty);
+}
+
+message Empty {
+
 }
 
 message DeployRequest {
