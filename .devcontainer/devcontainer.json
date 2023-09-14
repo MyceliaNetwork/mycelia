@@ -10,7 +10,8 @@
         "vadimcn.vscode-lldb",
         "rust-lang.rust-analyzer",
         "bytecodealliance.wit-idl",
-        "tamasfe.even-better-toml"
+        "tamasfe.even-better-toml",
+        "zxh404.vscode-proto3"
       ],
       "settings": {
         "editor.formatOnSave": true,
