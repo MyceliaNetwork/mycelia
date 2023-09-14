@@ -5,16 +5,11 @@ use std::{
     process::{Command, Stdio},
 };
 
-// use tonic::{transport::Server, Request, Response, Status};
-
-// use cli::greeter_client::GreeterClient;
-// use cli::HelloRequest;
-
 pub mod development {
-    tonic::include_proto!("cli");
+    tonic::include_proto!("development");
 }
-use crate::development::Empty;
 use development::development_client::DevelopmentClient;
+use development::Empty;
 
 type DynError = Box<dyn std::error::Error>;
 
