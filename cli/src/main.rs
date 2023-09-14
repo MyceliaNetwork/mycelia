@@ -28,13 +28,13 @@ enum Commands {
         /// The port http server should bind to.
         /// Default: 3001
         /// TODO: add support to override (both here and in the development_server)
-        #[clap(short, long, default_value = "3001")]
+        #[clap(long, default_value = "3001")]
         http_port: u16,
 
         /// The port rpc server should bind to
         /// Default: 50051
         /// TODO: add support to override (both here and in the development_server)
-        #[clap(short, long, default_value = "50051")]
+        #[clap(long, default_value = "50051")]
         rpc_port: u16,
 
         /// Open the development server in your default browser after starting.
@@ -77,8 +77,9 @@ fn start(
         .args(&[
             "run",
             "--package=development_server",
-            format!("--http_port={}", http_port).as_str(),
-            format!("--rpc_port={}", rpc_port).as_str(),
+            "--",
+            format!("--http-port={}", http_port).as_str(),
+            format!("--rpc-port={}", rpc_port).as_str(),
         ])
         .stdout(Stdio::piped())
         .spawn();
