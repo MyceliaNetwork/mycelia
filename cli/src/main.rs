@@ -7,11 +7,11 @@ use std::{
 
 // use tonic::{transport::Server, Request, Response, Status};
 
-use development::greeter_client::GreeterClient;
-use development::HelloRequest;
+use cli::greeter_client::GreeterClient;
+use cli::HelloRequest;
 
-pub mod development {
-    tonic::include_proto!("development");
+pub mod cli {
+    tonic::include_proto!("cli");
 }
 
 type DynError = Box<dyn std::error::Error>;
@@ -96,11 +96,22 @@ fn start(
     Ok(())
 }
 
-async fn stop() -> Result<(), DynError> {
-    let mut client = GreeterClient::connect("http://[::1]:50051").await?;
+async fn stop() -> Result<(), Box<dyn std::error::Error>> {
+    if let Err(e) = try_stop().await {
+        eprintln!("{}", e);
+
+        std::process::exit(-1);
+    }
+
+    Ok(())
+}
+
+async fn try_stop() -> Result<(), DynError> {
+    println!("Stopping development server");
+    let mut client = GreeterClient::connect("http://127.0.0.1:50051").await?;
 
     let request = tonic::Request::new(HelloRequest {
-        name: "Tonic".into(),
+        name: "hello".into(),
     });
 
     let response = client.say_hello(request).await?;
@@ -114,16 +125,6 @@ async fn stop() -> Result<(), DynError> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = try_main().await {
         eprintln!("{}", e);
-
-        let mut client = GreeterClient::connect("http://[::1]:50051").await?;
-
-        let request = tonic::Request::new(HelloRequest {
-            name: "Tonic".into(),
-        });
-
-        let response = client.say_hello(request).await?;
-
-        println!("RESPONSE={:?}", response);
 
         std::process::exit(-1);
     }
