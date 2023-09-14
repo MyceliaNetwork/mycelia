@@ -3,9 +3,7 @@ use std::{net::SocketAddr, path::Path, sync::Arc};
 use anyhow::anyhow;
 
 use function_service::{
-    service::{
-        new_function_service_maker, FunctionComponentService,
-    },
+    service::{new_function_service_maker, FunctionComponentService},
     types::{HttpRequest, HttpResponse},
 };
 use hyper::service::Service as HyperService;
@@ -166,7 +164,7 @@ fn run_server_command_loop(
                     let _ = shutdown_tx.send(());
                     let _ = reply.send(Ok(()));
                     break;
-                },
+                }
             };
         }
     })
