@@ -45,7 +45,19 @@ enum Commands {
         // TODO: add browser override list
     },
     /// Stop the Mycelia development server
-    Stop,
+    Stop {
+        /// The domain to listen on.
+        /// Default: localhost
+        /// TODO: add support to override (both here and in the development_server)
+        #[clap(short, long, default_value = "localhost")]
+        domain: String,
+
+        /// The port rpc server should bind to
+        /// Default: 50051
+        /// TODO: add support to override (both here and in the development_server)
+        #[clap(long, default_value = "50051")]
+        rpc_port: u16,
+    },
     /// Deploy your Mycelia project
     Deploy,
 }
@@ -96,8 +108,8 @@ fn start(
     Ok(())
 }
 
-async fn stop() -> Result<(), Box<dyn std::error::Error>> {
-    if let Err(e) = try_stop().await {
+async fn stop(domain: &str, rpc_port: &u16) -> Result<(), Box<dyn std::error::Error>> {
+    if let Err(e) = try_stop(domain, rpc_port).await {
         eprintln!("{}", e);
 
         std::process::exit(-1);
@@ -106,9 +118,10 @@ async fn stop() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn try_stop() -> Result<(), DynError> {
+async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     println!("Stopping development server");
-    let mut client = GreeterClient::connect("http://127.0.0.1:50051").await?;
+    let address = format!("http://{}:{}", domain, rpc_port);
+    let mut client = GreeterClient::connect(address).await?;
 
     let request = tonic::Request::new(HelloRequest {
         name: "hello".into(),
@@ -146,9 +159,9 @@ async fn try_main() -> Result<(), DynError> {
         } => {
             start(domain, http_port, rpc_port, open_browser)?;
         }
-        Commands::Stop => {
+        Commands::Stop { domain, rpc_port } => {
             // TODO: process Result
-            let _ = stop().await;
+            let _ = stop(domain, rpc_port).await;
         }
         Commands::Deploy => {
             println!("TODO: deploy");
