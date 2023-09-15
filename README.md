@@ -8,7 +8,7 @@ Open Source Application Stack &amp; PaaS
 cargo run build
 ```
 
-**IMPORTANT**: `cargo build` will fail because we use [cargo-xtask](https://github.com/matklad/cargo-xtask/) to build the ./components/ folder before building the project.
+**IMPORTANT**: `cargo build` will fail because we have to use [cargo-xtask](https://github.com/matklad/cargo-xtask/) to build the ./components/ folder before building the project.
 
 ## CLI
 

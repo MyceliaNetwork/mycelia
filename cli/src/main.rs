@@ -96,11 +96,10 @@ fn start(
     open_browser: &bool,
 ) -> Result<(), DynError> {
     // TODO: might wanna move these prints to the development_server
-    println!(
-        "Starting development server on http://{}:{}",
-        domain, http_port
-    );
-    println!("Starting rpc server on http://{}:{}", domain, rpc_port);
+    let http_addr = format!("http://{}:{}", domain, http_port);
+    let rpc_addr = format!("http://{}:{}", domain, rpc_port);
+    println!("HTTP development server listening on {}", http_addr);
+    println!("RPC server listening on {}", rpc_addr);
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let _status = Command::new(cargo)
