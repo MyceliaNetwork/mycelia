@@ -1,9 +1,12 @@
 use clap::{Parser, Subcommand};
+use std::net::SocketAddr;
 use std::{
     env,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
+// use tokio::net::TcpListener;
+use tokio::net::TcpSocket;
 
 pub mod development {
     tonic::include_proto!("development");
@@ -81,7 +84,7 @@ fn build() -> Result<(), DynError> {
         Err(format!(
             "`cargo xtask build` failed.
 
-    Status code: {}",
+Status code: {}",
             status.code().unwrap()
         ))?;
     }
@@ -89,7 +92,22 @@ fn build() -> Result<(), DynError> {
     Ok(())
 }
 
-fn start(
+fn make_socket(addr: SocketAddr) -> TcpSocket {
+    let socket = TcpSocket::new_v4().unwrap();
+    socket.set_reuseaddr(true).unwrap(); // allow to reuse the addr both for connect and listen
+    socket.set_reuseport(true).unwrap(); // same for the port
+    socket.bind(addr).unwrap();
+    socket
+}
+
+async fn is_peer_connected(addr: SocketAddr) -> bool {
+    make_socket("127.0.0.1:3001".parse().unwrap())
+        .connect(dbg!(addr))
+        .await
+        .is_ok()
+}
+
+async fn start(
     domain: &String,
     http_port: &u16,
     rpc_port: &u16,
@@ -101,26 +119,37 @@ fn start(
     println!("HTTP development server listening on {}", http_addr);
     println!("RPC server listening on {}", rpc_addr);
 
-    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let _status = Command::new(cargo)
-        .current_dir(project_root())
-        .args(&[
-            "run",
-            "--package=development_server",
-            "--",
-            format!("--http-port={}", http_port).as_str(),
-            format!("--rpc-port={}", rpc_port).as_str(),
-        ])
-        .stdout(Stdio::piped())
-        .spawn();
+    let () = if !is_peer_connected("127.0.0.1:3001".parse().unwrap()).await {
+        println!("Peer not connected. Starting server");
+        let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let _status = Command::new(cargo)
+            .current_dir(project_root())
+            .args(&[
+                "run",
+                "--package=development_server",
+                "--",
+                format!("--http-port={}", http_port).as_str(),
+                format!("--rpc-port={}", rpc_port).as_str(),
+            ])
+            .stdout(Stdio::piped())
+            .spawn();
+    } else {
+        println!("Peer already connected");
+    };
+
+    // }
 
     if *open_browser {
+        // let () = if is_peer_connected("127.0.0.1:3001".parse().unwrap()).await {
         let path = format!("http://{}:{}", domain, http_port);
 
         match open::that(&path) {
             Ok(()) => println!("Opened '{}' successfully.", path),
             Err(err) => eprintln!("An error occurred when opening '{}': {}", path, err),
         }
+        // } else {
+        //     println!("Peer not connected. Not opening browser");
+        // };
     }
 
     Ok(())
@@ -176,7 +205,7 @@ async fn try_main() -> Result<(), DynError> {
             rpc_port,
             open_browser,
         } => {
-            start(domain, http_port, rpc_port, open_browser)?;
+            start(domain, http_port, rpc_port, open_browser).await?;
         }
         Commands::Stop { domain, rpc_port } => {
             let _ = stop(domain, rpc_port).await;
