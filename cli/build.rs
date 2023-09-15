@@ -1,4 +1,7 @@
 // FIXME: this is a copy of /development_server/build.rs
+//
+// > it prob makes sense to eventualy get this into its own package.
+// > But, for now feel free to just repeat the boilerplate in the CLI.
 
 use std::{env, path::PathBuf};
 

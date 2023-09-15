@@ -4,13 +4,10 @@ syntax = "proto3";
 package development;
 
 service Development{
-  rpc StopServer(Empty) returns (Empty);
+  rpc StopServer(Empty) returns (Success);
 }
 
-message Empty {
+message Empty {}
 
-}
+message Success {}
 
-message StopServer{
-
-}
