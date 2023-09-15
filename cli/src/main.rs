@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::{
     env,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Command,
 };
 
 pub mod development {
@@ -89,8 +89,9 @@ Status code: {}",
     Ok(())
 }
 
-async fn poll_dev_server(address: String) -> Result<(), DynError> {
-    // TODO: use rand string
+async fn server_listening(address: String) -> Result<(), DynError> {
+    // TODO: return https://doc.rust-lang.org/stable/std/task/enum.Poll.html# ?
+    // TODO: use rand string?
     let echo = "poll_dev_server".to_string();
 
     let client = DevelopmentClient::connect(address.clone());
@@ -111,10 +112,10 @@ async fn poll_dev_server(address: String) -> Result<(), DynError> {
         let response = client.echo(request).await?;
 
         if response.into_inner() == (EchoReply { message: echo }) {
-            println!("Development server already listening on {}.", address);
+            eprintln!("Development server already listening");
             return Err("Development server already listening".into());
         } else {
-            println!("Server not yet started");
+            eprintln!("Error echoing message to RPC server");
             return Ok(());
         }
     }
@@ -130,10 +131,8 @@ async fn start(
     let http_addr = format!("http://{}:{}", domain, http_port);
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
 
-    println!("HTTP development server listening on {}", http_addr);
-    println!("RPC server listening on {}", rpc_addr);
-
-    if let Ok(_) = poll_dev_server(rpc_addr.clone()).await {
+    // TODO: handle Error from server_listening
+    if let Ok(_) = server_listening(rpc_addr.clone()).await {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
         let _status = Command::new(cargo)
             .current_dir(project_root())
@@ -144,15 +143,19 @@ async fn start(
                 format!("--http-port={}", http_port).as_str(),
                 format!("--rpc-port={}", rpc_port).as_str(),
             ])
-            .stdout(Stdio::piped())
             .spawn();
+
+        println!("HTTP development server listening on {}", http_addr);
+        println!("RPC server listening on {}", rpc_addr);
     }
 
     if *open_browser {
-        match open::that(&http_addr) {
+            match open::that(&http_addr) {
             Ok(()) => println!("Opened '{}' in your default browser.", http_addr),
-            Err(err) => eprintln!("An error occurred when opening '{}': {}", http_addr, err),
-        }
+                Err(err) => eprintln!("An error occurred when opening '{}': {}", http_addr, err),
+            }
+    } else {
+        println!("You can reach the development server on {}", http_addr);
     }
 
     Ok(())
@@ -178,7 +181,7 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     if response.into_inner() == (Success {}) {
         println!("Successfully stopped development server");
     } else {
-        println!("Failed to stop development server");
+        eprintln!("Failed to stop development server");
     }
 
     Ok(())
@@ -210,7 +213,7 @@ async fn try_main() -> Result<(), DynError> {
             rpc_port,
             open_browser,
         } => {
-            start(domain, http_port, rpc_port, open_browser).await?;
+            let _ = start(domain, http_port, rpc_port, open_browser).await?;
         }
         Commands::Stop { domain, rpc_port } => {
             let _ = stop(domain, rpc_port).await;
