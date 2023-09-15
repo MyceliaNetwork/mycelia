@@ -138,11 +138,9 @@ async fn start(
     };
 
     if *open_browser {
-        let path = format!("http://{}:{}", domain, http_port);
-
-        match open::that(&path) {
-            Ok(()) => println!("Opened '{}' successfully.", path),
-            Err(err) => eprintln!("An error occurred when opening '{}': {}", path, err),
+        match open::that(&http_addr) {
+            Ok(()) => println!("Opened '{}' in your default browser.", http_addr),
+            Err(err) => eprintln!("An error occurred when opening '{}': {}", http_addr, err),
         }
     }
 
