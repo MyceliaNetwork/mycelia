@@ -9,7 +9,7 @@ pub mod development {
     tonic::include_proto!("development");
 }
 use development::development_client::DevelopmentClient;
-use development::{Empty, Success};
+use development::{EchoReply, EchoRequest, Empty, Success};
 
 type DynError = Box<dyn std::error::Error>;
 
@@ -89,6 +89,37 @@ Status code: {}",
     Ok(())
 }
 
+async fn poll_dev_server(address: String) -> Result<(), DynError> {
+    // TODO: use rand string
+    let echo = "poll_dev_server".to_string();
+
+    let client = DevelopmentClient::connect(address.clone());
+    if let Err(e) = client.await {
+        if e.to_string() == "transport error" {
+            println!("Server not yet started");
+            return Ok(());
+        } else {
+            return Err(e.into());
+        }
+    } else {
+        println!("Echoing RPC server");
+        let mut client = DevelopmentClient::connect(address).await?;
+        let message = EchoRequest {
+            message: echo.clone(),
+        };
+        let request = tonic::Request::new(message);
+        let response = client.echo(request).await?;
+
+        println!("RESPONSE={:?}", response);
+        if response.into_inner() == (EchoReply { message: echo }) {
+            return Err("Development server already listening".into());
+        } else {
+            println!("Server not yet started");
+            return Ok(());
+        }
+    }
+}
+
 async fn start(
     domain: &String,
     http_port: &u16,
@@ -102,18 +133,22 @@ async fn start(
     println!("HTTP development server listening on {}", http_addr);
     println!("RPC server listening on {}", rpc_addr);
 
-    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let _status = Command::new(cargo)
-        .current_dir(project_root())
-        .args(&[
-            "run",
-            "--package=development_server",
-            "--",
-            format!("--http-port={}", http_port).as_str(),
-            format!("--rpc-port={}", rpc_port).as_str(),
-        ])
-        .stdout(Stdio::piped())
-        .spawn();
+    if let Err(e) = poll_dev_server(rpc_addr.clone()).await {
+        eprintln!("Poll Error: {}", e);
+    } else {
+        let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let _status = Command::new(cargo)
+            .current_dir(project_root())
+            .args(&[
+                "run",
+                "--package=development_server",
+                "--",
+                format!("--http-port={}", http_port).as_str(),
+                format!("--rpc-port={}", rpc_port).as_str(),
+            ])
+            .stdout(Stdio::piped())
+            .spawn();
+    }
 
     if *open_browser {
         match open::that(&http_addr) {

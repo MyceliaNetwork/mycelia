@@ -4,6 +4,7 @@ syntax = "proto3";
 package development;
 
 service Development{
+  rpc Echo(EchoRequest) returns (EchoReply) {};
   rpc StopServer(Empty) returns (Success);
 }
 
@@ -11,3 +12,10 @@ message Empty {}
 
 message Success {}
 
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoReply {
+  string message = 1;
+}
