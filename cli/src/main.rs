@@ -137,19 +137,13 @@ async fn start(
         println!("Peer already connected");
     };
 
-    // }
-
     if *open_browser {
-        // let () = if is_peer_connected("127.0.0.1:3001".parse().unwrap()).await {
         let path = format!("http://{}:{}", domain, http_port);
 
         match open::that(&path) {
             Ok(()) => println!("Opened '{}' successfully.", path),
             Err(err) => eprintln!("An error occurred when opening '{}': {}", path, err),
         }
-        // } else {
-        //     println!("Peer not connected. Not opening browser");
-        // };
     }
 
     Ok(())
@@ -169,8 +163,6 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     println!("Stopping development server");
     let address = format!("http://{}:{}", domain, rpc_port);
     let mut client = DevelopmentClient::connect(address).await?;
-
-    // let request = tonic::Request::new(StopServer {});
 
     let response = client.stop_server(Empty {}).await?;
 
