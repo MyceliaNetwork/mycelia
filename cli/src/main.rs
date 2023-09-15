@@ -1,18 +1,15 @@
 use clap::{Parser, Subcommand};
-use std::net::SocketAddr;
 use std::{
     env,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
-// use tokio::net::TcpListener;
-use tokio::net::TcpSocket;
 
 pub mod development {
     tonic::include_proto!("development");
 }
 use development::development_client::DevelopmentClient;
-use development::Empty;
+use development::{Empty, Success};
 
 type DynError = Box<dyn std::error::Error>;
 
@@ -92,21 +89,6 @@ Status code: {}",
     Ok(())
 }
 
-fn make_socket(addr: SocketAddr) -> TcpSocket {
-    let socket = TcpSocket::new_v4().unwrap();
-    socket.set_reuseaddr(true).unwrap(); // allow to reuse the addr both for connect and listen
-    socket.set_reuseport(true).unwrap(); // same for the port
-    socket.bind(addr).unwrap();
-    socket
-}
-
-async fn is_peer_connected(addr: SocketAddr) -> bool {
-    make_socket("127.0.0.1:3001".parse().unwrap())
-        .connect(dbg!(addr))
-        .await
-        .is_ok()
-}
-
 async fn start(
     domain: &String,
     http_port: &u16,
@@ -116,26 +98,22 @@ async fn start(
     // TODO: might wanna move these prints to the development_server
     let http_addr = format!("http://{}:{}", domain, http_port);
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
+
     println!("HTTP development server listening on {}", http_addr);
     println!("RPC server listening on {}", rpc_addr);
 
-    let () = if !is_peer_connected("127.0.0.1:3001".parse().unwrap()).await {
-        println!("Peer not connected. Starting server");
-        let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-        let _status = Command::new(cargo)
-            .current_dir(project_root())
-            .args(&[
-                "run",
-                "--package=development_server",
-                "--",
-                format!("--http-port={}", http_port).as_str(),
-                format!("--rpc-port={}", rpc_port).as_str(),
-            ])
-            .stdout(Stdio::piped())
-            .spawn();
-    } else {
-        println!("Peer already connected");
-    };
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let _status = Command::new(cargo)
+        .current_dir(project_root())
+        .args(&[
+            "run",
+            "--package=development_server",
+            "--",
+            format!("--http-port={}", http_port).as_str(),
+            format!("--rpc-port={}", rpc_port).as_str(),
+        ])
+        .stdout(Stdio::piped())
+        .spawn();
 
     if *open_browser {
         match open::that(&http_addr) {
@@ -161,10 +139,14 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     println!("Stopping development server");
     let address = format!("http://{}:{}", domain, rpc_port);
     let mut client = DevelopmentClient::connect(address).await?;
+    let request = tonic::Request::new(Empty {});
+    let response = client.stop_server(request).await?;
 
-    let response = client.stop_server(Empty {}).await?;
-
-    println!("RESPONSE={:?}", response);
+    if response.into_inner() == (Success {}) {
+        println!("Successfully stopped development server");
+    } else {
+        println!("Failed to stop development server");
+    }
 
     Ok(())
 }
