@@ -102,16 +102,16 @@ async fn poll_dev_server(address: String) -> Result<(), DynError> {
             return Err(e.into());
         }
     } else {
-        println!("Echoing RPC server");
-        let mut client = DevelopmentClient::connect(address).await?;
+        // FIXME: prevent duplicate ::connect
+        let mut client = DevelopmentClient::connect(address.clone()).await?;
         let message = EchoRequest {
             message: echo.clone(),
         };
         let request = tonic::Request::new(message);
         let response = client.echo(request).await?;
 
-        println!("RESPONSE={:?}", response);
         if response.into_inner() == (EchoReply { message: echo }) {
+            println!("Development server already listening on {}.", address);
             return Err("Development server already listening".into());
         } else {
             println!("Server not yet started");
@@ -133,9 +133,7 @@ async fn start(
     println!("HTTP development server listening on {}", http_addr);
     println!("RPC server listening on {}", rpc_addr);
 
-    if let Err(e) = poll_dev_server(rpc_addr.clone()).await {
-        eprintln!("Poll Error: {}", e);
-    } else {
+    if let Ok(_) = poll_dev_server(rpc_addr.clone()).await {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
         let _status = Command::new(cargo)
             .current_dir(project_root())
