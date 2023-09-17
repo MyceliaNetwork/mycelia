@@ -23,7 +23,7 @@ enum Commands {
         /// The domain to listen on.
         /// Default: localhost
         /// TODO: add support to override (both here and in the development_server)
-        #[clap(short, long, default_value = "localhost")]
+        #[clap(short, long, default_value = "127.0.0.1")]
         domain: String,
         /// The port http server should bind to.
         /// Default: 3001
@@ -49,7 +49,7 @@ enum Commands {
         /// The domain to listen on.
         /// Default: localhost
         /// TODO: add support to override (both here and in the development_server)
-        #[clap(short, long, default_value = "localhost")]
+        #[clap(short, long, default_value = "127.0.0.1")]
         domain: String,
 
         /// The port rpc server should bind to
@@ -111,12 +111,16 @@ async fn server_listening(address: String) -> Result<(), DynError> {
         let request = tonic::Request::new(message);
         let response = client.echo(request).await?;
 
-        if response.into_inner() == (EchoReply { message: echo }) {
-            eprintln!("Development server already listening");
-            return Err("Development server already listening".into());
-        } else {
-            eprintln!("Error echoing message to RPC server");
-            return Ok(());
+        match response.into_inner() {
+            EchoReply { message } => {
+                if message == echo {
+                    println!("Development server already listening");
+                    return Err("Development server already listening".into());
+                } else {
+                    println!("Error echoing message to RPC server");
+                    return Ok(());
+                }
+            }
         }
     }
 }
@@ -150,10 +154,10 @@ async fn start(
     }
 
     if *open_browser {
-            match open::that(&http_addr) {
+        match open::that(&http_addr) {
             Ok(()) => println!("Opened '{}' in your default browser.", http_addr),
-                Err(err) => eprintln!("An error occurred when opening '{}': {}", http_addr, err),
-            }
+            Err(err) => eprintln!("An error occurred when opening '{}': {}", http_addr, err),
+        }
     } else {
         println!("You can reach the development server on {}", http_addr);
     }
@@ -178,10 +182,10 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     let request = tonic::Request::new(Empty {});
     let response = client.stop_server(request).await?;
 
-    if response.into_inner() == (Success {}) {
-        println!("Successfully stopped development server");
-    } else {
-        eprintln!("Failed to stop development server");
+    match response.into_inner() {
+        Success {} => {
+            println!("Successfully stopped development server");
+        }
     }
 
     Ok(())
