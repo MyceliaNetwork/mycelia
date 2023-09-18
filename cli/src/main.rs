@@ -178,13 +178,25 @@ async fn stop(domain: &str, rpc_port: &u16) -> Result<(), Box<dyn std::error::Er
 async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     println!("Stopping development server");
     let address = format!("http://{}:{}", domain, rpc_port);
-    let mut client = DevelopmentClient::connect(address).await?;
-    let request = tonic::Request::new(Empty {});
-    let response = client.stop_server(request).await?;
+    // let mut client = DevelopmentClient::connect(address).await?;
 
-    match response.into_inner() {
-        Success {} => {
-            println!("Successfully stopped development server");
+    let client = DevelopmentClient::connect(address.clone());
+    if let Err(e) = client.await {
+        if e.to_string() == "transport error" {
+            println!("Server already stopped");
+            return Ok(());
+        } else {
+            return Err(e.into());
+        }
+    } else {
+        let mut client = DevelopmentClient::connect(address.clone()).await?;
+        let request = tonic::Request::new(Empty {});
+        let response = client.stop_server(request).await?;
+
+        match response.into_inner() {
+            Success {} => {
+                println!("Successfully stopped development server");
+            }
         }
     }
 
