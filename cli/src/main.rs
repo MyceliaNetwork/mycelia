@@ -126,9 +126,23 @@ async fn server_listening(address: String) -> Result<(), DynError> {
     }
 }
 
-// async fn poll_server_listening() {
+async fn poll_server_listening() -> Result<(), DynError> {
+    let start = tokio::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
 
-// }
+    loop {
+        if let Err(_) = server_listening("http://127.0.0.1:50051".to_string()).await {
+            println!("Development server listening x");
+            return Ok(());
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        if start.elapsed() > timeout {
+            Err("Timeout waiting for server to start")?;
+        }
+    }
+}
 
 async fn start(
     domain: &String,
@@ -159,6 +173,7 @@ async fn start(
     }
 
     if *open_browser {
+        poll_server_listening().await?;
         match open::that(&http_addr) {
             Ok(()) => println!("Opened '{}' in your default browser.", http_addr),
             Err(err) => eprintln!("An error occurred when opening '{}': {}", http_addr, err),
