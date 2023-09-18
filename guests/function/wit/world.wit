@@ -6,7 +6,11 @@ package mycelia:execution@0.0.1
 // We MUST move towards adoping support.
 // This is non-negotiable.
 
+use wasi:http/types as wasi-http-types
+use wasi:http/incoming-handler as wasi-http-handler
+
 interface types {
+
   type status = u16
   variant method {
     get,
@@ -24,6 +28,7 @@ interface types {
   type headers = list<tuple<string, string>>
   type body = list<u8>
   type uri = string
+
 
   // Used for producing requests only
   record options {
@@ -45,9 +50,10 @@ interface types {
 }
 
 world function-world {
-  // todo.. these aren't real
+  import wasi:clocks/wall-clock
+  import wasi:io/streams
+  
   use types.{http-request, http-response}
-
 
   export handle-request: func(req: http-request) -> http-response
 }

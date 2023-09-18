@@ -2,7 +2,8 @@ mod bindgen {
     use wasmtime::component::*;
 
     bindgen!({
-      path: "../../guests/function/wit/function.wit",
+      path: "../../guests/function/wit",
+      world: "function-world",
       async: true
     });
 }

@@ -10,5 +10,9 @@ edition = "2021"
 [dependencies]
 wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen", branch = "main" }
 
+[build-dependencies]
+wit-deps = "0.3.1"
+anyhow = {workspace = true}
+
 [lib]
 crate-type = ["cdylib"]

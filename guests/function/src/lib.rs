@@ -12,7 +12,7 @@ wit_bindgen::generate!({
     // namely the `run` function.
     exports: {
         world: TestFunction,
-        "mycelia:execution/function-interface": TestFunction
+        "mycelia:execution/function-world": TestFunction
     },
 });
 
