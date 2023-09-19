@@ -262,8 +262,6 @@ async fn start(
     rpc_port: &u16,
     open_browser: &bool,
 ) -> Result<(), DynError> {
-    info!("Attempting to start servers");
-
     // TODO: might wanna move these prints to the development_server
     let http_addr = format!("http://{}:{}", domain, http_port);
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
