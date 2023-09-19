@@ -1,8 +1,14 @@
 use clap::{Parser, Subcommand};
 use std::{
     env,
+    future::Future,
     path::{Path, PathBuf},
-    process::Command,
+    process::Stdio,
+};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+    process::{Child, ChildStdin, ChildStdout, Command},
+    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
 };
 
 pub mod development {
@@ -58,6 +64,8 @@ enum Commands {
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
     },
+    // TODO: rm
+    Print,
     /// Deploy your Mycelia project
     Deploy,
 }
@@ -70,9 +78,13 @@ struct Cli {
     command: Commands,
 }
 
+struct LSPClient {
+    _process: Child,
+}
+
 fn build() -> Result<(), DynError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let status = Command::new(cargo)
+    let status = std::process::Command::new(cargo)
         .current_dir(project_root())
         .args(&["xtask", "build"])
         .status()?;
@@ -144,6 +156,121 @@ async fn poll_server_listening() -> Result<(), DynError> {
     }
 }
 
+async fn trigger(domain: &String, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
+    let (_client, tx_send, _tx_recv, wait) =
+        start_server(domain, http_port, rpc_port, open_browser);
+
+    tx_send.send("initialize".as_bytes().to_vec()).ok();
+
+    // Wait for the handlers to exit. Currently this will never happen
+    wait.await
+}
+
+fn start_server(
+    domain: &String,
+    http_port: &u16,
+    rpc_port: &u16,
+    open_browser: &bool,
+) -> (
+    LSPClient,
+    UnboundedSender<Vec<u8>>,
+    UnboundedSender<Vec<u8>>,
+    impl Future<Output = ()>,
+) {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let mut process = Command::new(cargo)
+        .current_dir(project_root())
+        .args(&[
+            "run",
+            "--package=development_server",
+            "--",
+            format!("--http-port={}", http_port).as_str(),
+            format!("--rpc-port={}", rpc_port).as_str(),
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("Unable to spawn process");
+
+    let proc_id = process.id().expect("Unable to fetch process id");
+    println!("proc id: {}", proc_id);
+
+    let stdin = process.stdin.take().unwrap();
+    let stdout = process.stdout.take().unwrap();
+    // let stderr = process.stderr.take().unwrap();
+
+    let writer = BufWriter::new(stdin);
+    let reader = BufReader::new(stdout);
+
+    let (tx_send, rx_send) = unbounded_channel::<Vec<u8>>();
+    let (tx_recv, rx_recv) = unbounded_channel::<Vec<u8>>();
+
+    println!("setting up tx,rx");
+    // This future waits for handlers to exit, we don't want to await it here.
+    // Return it instead so the caller can await it.
+    let wait = setup_listeners(reader, writer, rx_send, rx_recv);
+
+    // Send initialize request
+    println!("initialize request");
+    tx_send.send("initialize".as_bytes().to_vec()).ok();
+    let client = LSPClient { _process: process };
+
+    (client, tx_send, tx_recv, wait)
+}
+
+async fn setup_listeners(
+    mut reader: BufReader<ChildStdout>,
+    mut writer: BufWriter<ChildStdin>,
+    mut rx_send: UnboundedReceiver<Vec<u8>>,
+    mut rx_recv: UnboundedReceiver<Vec<u8>>,
+) {
+    let handle_recv = tokio::spawn(async move {
+        loop {
+            // Wait until a message is available instead of constantly polling for a message.
+            match rx_recv.recv().await {
+                Some(data) => {
+                    println!("rx_recv got: {:?}", String::from_utf8(data));
+
+                    let mut buf = String::new();
+                    let _ = reader.read_line(&mut buf);
+                }
+                None => {
+                    println!("rx_recv: quitting loop");
+                    break;
+                }
+            }
+        }
+    });
+
+    let handle_send = tokio::spawn(async move {
+        loop {
+            // Wait until a message is available instead of constantly polling for a message.
+            match rx_send.recv().await {
+                Some(data) => {
+                    println!("rx_send: got something");
+                    let str = String::from_utf8(data).expect("invalid data for parse");
+                    println!("rx_send: sending to LSP: {:?}", str);
+
+                    _ = writer.write_all(str.as_bytes());
+                }
+                None => {
+                    println!("rx_recv: quitting loop");
+                    break;
+                }
+            }
+        }
+    });
+
+    // Wait for a handler to exit. You already spawned the handlers, you don't need to spawn them again.
+    // I'm using select instead of join so we can see any errors immediately.
+    tokio::select! {
+       send = handle_send => println!("{send:?}"),
+       recv = handle_recv => println!("{recv:?}"),
+    };
+}
+
 async fn start(
     domain: &String,
     http_port: &u16,
@@ -156,17 +283,7 @@ async fn start(
 
     // TODO: handle Error from server_listening
     if let Ok(_) = server_listening(rpc_addr.clone()).await {
-        let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-        let _status = Command::new(cargo)
-            .current_dir(project_root())
-            .args(&[
-                "run",
-                "--package=development_server",
-                "--",
-                format!("--http-port={}", http_port).as_str(),
-                format!("--rpc-port={}", rpc_port).as_str(),
-            ])
-            .spawn();
+        trigger(domain, http_port, rpc_port, open_browser).await;
 
         println!("HTTP development server listening on {}", http_addr);
         println!("RPC server listening on {}", rpc_addr);
@@ -254,6 +371,9 @@ async fn try_main() -> Result<(), DynError> {
         }
         Commands::Stop { domain, rpc_port } => {
             let _ = stop(domain, rpc_port).await;
+        }
+        Commands::Print {} => {
+            println!("TODO: print");
         }
         Commands::Deploy => {
             println!("TODO: deploy");
