@@ -45,7 +45,7 @@ impl Development for RpcServer {
         &self,
         request: tonic::Request<EchoRequest>,
     ) -> Result<tonic::Response<EchoReply>, tonic::Status> {
-        println!("received echo cmd. message",);
+        info!("received echo cmd. message",);
 
         Ok(tonic::Response::new(EchoReply {
             message: request.into_inner().message,
@@ -101,7 +101,7 @@ pub(crate) async fn start_rpc_server(command_sink: ServiceCommandSink, socket_ad
 
     let server = RpcServer::new(command_sink);
     let server = protos::development_server::DevelopmentServer::new(server);
-
+    info!("preparing to start rpc server");
     let _server = tonic::transport::Server::builder()
         .add_service(reflection)
         .add_service(server)

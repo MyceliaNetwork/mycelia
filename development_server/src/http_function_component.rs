@@ -196,7 +196,7 @@ pub(crate) async fn start_development_server(
         .with_graceful_shutdown(async move {
             let _ = shutdown_rx.await;
         });
-
+    info!("Starting HTTP Server");
     tokio::select! {
       _ = component_host_server => {
         warn!("component_host_server returned");
