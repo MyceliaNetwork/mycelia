@@ -1,14 +1,15 @@
 use clap::{Parser, Subcommand};
 use log::{debug, error, info};
+use core::panic;
 use std::{
     env,
     future::Future,
     path::{Path, PathBuf},
-    process::Stdio,
+    process::Stdio, time::Duration,
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
-    process::{Child, ChildStdin, ChildStdout, Command},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter, AsyncReadExt},
+    process::{Child, ChildStdin, ChildStdout, Command, ChildStderr},
     sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
 };
 
@@ -80,7 +81,7 @@ struct Cli {
 }
 
 struct LSPClient {
-    _process: Child,
+    process: Child,
 }
 
 fn build() -> Result<(), DynError> {
@@ -158,13 +159,23 @@ async fn poll_server_listening() -> Result<(), DynError> {
 }
 
 async fn trigger(domain: &String, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
-    let (_client, tx_send, _tx_recv, wait) =
+    let (client, wait) =
         start_server(domain, http_port, rpc_port, open_browser);
 
-    tx_send.send("initialize".as_bytes().to_vec()).ok();
+    // Spin off child process to make sure it can make process on its own
+    // while we read its output
+
+    let mut process = client.process;
+
+    // todo tokio select on this
+    let task_handle = tokio::spawn(async move {
+        let status = process.wait().await.expect("development server process encountered an error");
+        info!("Process exited {:#?}. Cannot continue.", status);
+    });
 
     // Wait for the handlers to exit. Currently this will never happen
-    wait.await
+    wait.await;
+    task_handle.await;
 }
 
 fn start_server(
@@ -174,13 +185,11 @@ fn start_server(
     _open_browser: &bool,
 ) -> (
     LSPClient,
-    UnboundedSender<Vec<u8>>,
-    UnboundedSender<Vec<u8>>,
     impl Future<Output = ()>,
 ) {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let mut process = Command::new(cargo)
-        .env("RUST_LOG", "trace")
+        .env("RUST_LOG", "info")
         .current_dir(project_root())
         .args(&[
             "run",
@@ -189,7 +198,6 @@ fn start_server(
             format!("--http-port={}", http_port).as_str(),
             format!("--rpc-port={}", rpc_port).as_str(),
         ])
-        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -199,78 +207,55 @@ fn start_server(
     let proc_id = process.id().expect("Unable to fetch process id");
     info!("proc id: {}", proc_id);
 
-    let stdin = process.stdin.take().unwrap();
     let stdout = process.stdout.take().unwrap();
-    // let stderr = process.stderr.take().unwrap();
+    let stdout_reader = BufReader::new(stdout);
 
-    let writer = BufWriter::new(stdin);
-    let reader = BufReader::new(stdout);
+    let stderr = process.stderr.take().unwrap();
+    let stderr_reader = BufReader::new(stderr);
 
-    let (tx_send, rx_send) = unbounded_channel::<Vec<u8>>();
-    let (tx_recv, rx_recv) = unbounded_channel::<Vec<u8>>();
-
-    info!("setting up tx,rx");
     // This future waits for handlers to exit, we don't want to await it here.
     // Return it instead so the caller can await it.
-    let wait = setup_listeners(reader, writer, rx_send, rx_recv);
+    let wait = setup_listeners(stdout_reader, stderr_reader);
 
     // Send initialize request
     debug!("initialize request");
-    tx_send.send("initialize".as_bytes().to_vec()).ok();
-    let client = LSPClient { _process: process };
+    let client = LSPClient { process };
 
-    (client, tx_send, tx_recv, wait)
+    (client, wait)
 }
 
 async fn setup_listeners(
-    mut reader: BufReader<ChildStdout>,
-    mut writer: BufWriter<ChildStdin>,
-    mut rx_send: UnboundedReceiver<Vec<u8>>,
-    mut rx_recv: UnboundedReceiver<Vec<u8>>,
+    mut stdout_reader: BufReader<ChildStdout>,
+    mut stderr_reader: BufReader<ChildStderr>,
 ) {
-    let handle_recv = tokio::spawn(async move {
+    let handle_stdout = tokio::spawn(async move {
+        let mut reader = stdout_reader.lines();
         loop {
-            // Wait until a message is available instead of constantly polling for a message.
-            match rx_recv.recv().await {
-                Some(data) => {
-                    info!("rx_recv got: {:?}", String::from_utf8(data));
-
-                    let mut buf = String::new();
-                    let _ = reader.read_line(&mut buf);
-                }
-                None => {
-                    debug!("rx_recv: quitting loop");
-                    break;
-                }
+            match reader.next_line().await {
+                Ok(Some(string)) => {
+                    info!("LOG {}", string);
+                },
+                Ok(None) => {},
+                Err(_) => todo!(),
             }
         }
     });
 
-    let handle_send = tokio::spawn(async move {
+    let handle_stderr = tokio::spawn(async move {
+        let mut reader = stderr_reader.lines();
         loop {
-            // Wait until a message is available instead of constantly polling for a message.
-            match rx_send.recv().await {
-                Some(data) => {
-                    info!("rx_send: got something");
-                    let str = String::from_utf8(data).expect("invalid data for parse");
-                    info!("rx_send: sending to LSP: {:?}", str);
-
-                    _ = writer.write_all(str.as_bytes());
-                }
-                None => {
-                    debug!("rx_recv: quitting loop");
-                    break;
-                }
+            match reader.next_line().await {
+                Ok(Some(string)) => {
+                    info!("LOG {}", string);
+                },
+                Ok(None) => {},
+                Err(_) => todo!(),
             }
         }
     });
-
-    // Wait for a handler to exit. You already spawned the handlers, you don't need to spawn them again.
-    // I'm using select instead of join so we can see any errors immediately.
-    tokio::select! {
-       send = handle_send => println!("{send:?}"),
-       recv = handle_recv => println!("{recv:?}"),
-    };
+    // TODO tokio select
+    handle_stdout.await;
+    handle_stderr.await;
 }
 
 async fn start(
@@ -279,6 +264,8 @@ async fn start(
     rpc_port: &u16,
     open_browser: &bool,
 ) -> Result<(), DynError> {
+    info!("Attempting to start servers");
+
     // TODO: might wanna move these prints to the development_server
     let http_addr = format!("http://{}:{}", domain, http_port);
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
