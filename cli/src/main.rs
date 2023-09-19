@@ -167,10 +167,10 @@ async fn trigger(domain: &String, http_port: &u16, rpc_port: &u16, open_browser:
 }
 
 fn start_server(
-    domain: &String,
+    _domain: &String,
     http_port: &u16,
     rpc_port: &u16,
-    open_browser: &bool,
+    _open_browser: &bool,
 ) -> (
     LSPClient,
     UnboundedSender<Vec<u8>>,
