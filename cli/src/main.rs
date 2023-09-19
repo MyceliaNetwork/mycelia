@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use std::{
     env,
@@ -8,7 +8,7 @@ use std::{
     process::Stdio,
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, ChildStdout, Command},
 };
 
@@ -65,8 +65,6 @@ enum Commands {
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
     },
-    // TODO: rm
-    Print,
     /// Deploy your Mycelia project
     Deploy,
 }
@@ -122,8 +120,8 @@ async fn server_listening(address: String) -> Result<(), DynError> {
         let message = EchoRequest {
             message: echo.clone(),
         };
-        let request = tonic::Request::new(message);
-        let response = client.echo(request).await?;
+        let payload = tonic::Request::new(message);
+        let response = client.echo(payload).await?;
 
         match response.into_inner() {
             EchoReply { message } => {
@@ -145,7 +143,7 @@ async fn poll_server_listening() -> Result<(), DynError> {
 
     loop {
         if let Err(_) = server_listening("http://127.0.0.1:50051".to_string()).await {
-            info!("Development server listening x");
+            warn!("Development server listening");
             return Ok(());
         }
 
@@ -157,37 +155,42 @@ async fn poll_server_listening() -> Result<(), DynError> {
     }
 }
 
-async fn trigger(domain: &String, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
-    let (client, wait) = start_server(domain, http_port, rpc_port, open_browser);
+async fn trigger(http_port: &u16, rpc_port: &u16) {
+    let (client, wait) = start_server(http_port, rpc_port);
 
     // Spin off child process to make sure it can make process on its own
     // while we read its output
 
     let mut process = client.process;
 
-    // todo tokio select on this
     let task_handle = tokio::spawn(async move {
         let status = process
             .wait()
             .await
             .expect("development server process encountered an error");
-        info!("Process exited {:#?}. Cannot continue.", status);
+        info!(
+            "Process exited {:#?}.
+Cannot continue.",
+            status
+        );
     });
 
-    // Wait for the handlers to exit. Currently this will never happen
-    wait.await;
-    task_handle.await;
+    tokio::select! {
+        // Wait for the handlers to exit. Currently this will never happen
+        wait = wait =>  error!("wait {:?}", wait),
+        task_handle = task_handle => {
+            match task_handle {
+                Ok(_) => std::process::exit(-1),
+                Err(e) => error!("task_handle error {:?}", e)
+            }
+        }
+    }
 }
 
-fn start_server(
-    _domain: &String,
-    http_port: &u16,
-    rpc_port: &u16,
-    _open_browser: &bool,
-) -> (LSPClient, impl Future<Output = ()>) {
+fn start_server(http_port: &u16, rpc_port: &u16) -> (LSPClient, impl Future<Output = ()>) {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let mut process = Command::new(cargo)
-        .env("RUST_LOG", "info")
+        .env("RUST_LOG", "warn")
         .current_dir(project_root())
         .args(&[
             "run",
@@ -226,34 +229,33 @@ async fn setup_listeners(
     stdout_reader: BufReader<ChildStdout>,
     stderr_reader: BufReader<ChildStderr>,
 ) {
-    let handle_stdout = tokio::spawn(async move {
+    let handle_recv = tokio::spawn(async move {
         let mut reader = stdout_reader.lines();
         loop {
             match reader.next_line().await {
-                Ok(Some(string)) => {
-                    info!("LOG {}", string);
-                }
-                Ok(None) => {}
-                Err(_) => todo!(),
+                Ok(Some(string)) => info!("handle_recv: {}", string),
+                Ok(None) => info!("handle_recv: None"),
+                Err(e) => error!("handle_recv: {:?}", e),
             }
         }
     });
 
-    let handle_stderr = tokio::spawn(async move {
+    let handle_send = tokio::spawn(async move {
         let mut reader = stderr_reader.lines();
         loop {
             match reader.next_line().await {
-                Ok(Some(string)) => {
-                    info!("LOG {}", string);
-                }
-                Ok(None) => {}
-                Err(_) => todo!(),
+                Ok(Some(string)) => info!("handle_send: {}", string),
+                Ok(None) => info!("handle_send: None"),
+                Err(e) => error!("handle_send: {:?}", e),
             }
         }
     });
-    // TODO tokio select
-    handle_stdout.await;
-    handle_stderr.await;
+    // Wait for a handler to exit. You already spawned the handlers, you don't need to spawn them again.
+    // I'm using select instead of join so we can see any errors immediately.
+    tokio::select! {
+        recv = handle_recv => println!("recv: {:?}", recv),
+        send = handle_send => println!("send: {:?}", send),
+    };
 }
 
 async fn start(
@@ -262,13 +264,12 @@ async fn start(
     rpc_port: &u16,
     open_browser: &bool,
 ) -> Result<(), DynError> {
-    // TODO: might wanna move these prints to the development_server
     let http_addr = format!("http://{}:{}", domain, http_port);
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
 
     // TODO: handle Error from server_listening
     if let Ok(_) = server_listening(rpc_addr.clone()).await {
-        trigger(domain, http_port, rpc_port, open_browser).await;
+        trigger(http_port, rpc_port).await;
 
         debug!("HTTP development server listening on {}", http_addr);
         debug!("RPC server listening on {}", rpc_addr);
@@ -304,8 +305,8 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     match client {
         Ok(_) => {
             let mut client = DevelopmentClient::connect(address.clone()).await?;
-            let request = tonic::Request::new(Empty {});
-            let response = client.stop_server(request).await?;
+            let payload = tonic::Request::new(Empty {});
+            let response = client.stop_server(payload).await?;
 
             match response.into_inner() {
                 Success {} => {
@@ -328,7 +329,12 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info")
+    }
+
     env_logger::init();
+
     if let Err(e) = try_main().await {
         error!("{}", e);
     }
@@ -351,13 +357,10 @@ async fn try_main() -> Result<(), DynError> {
             rpc_port,
             open_browser,
         } => {
-            let _ = start(domain, http_port, rpc_port, open_browser).await?;
+            let _ = start(domain, http_port, rpc_port, open_browser).await;
         }
         Commands::Stop { domain, rpc_port } => {
             let _ = stop(domain, rpc_port).await;
-        }
-        Commands::Print {} => {
-            println!("TODO: print");
         }
         Commands::Deploy => {
             println!("TODO: deploy");
