@@ -8,7 +8,7 @@ Open Source Application Stack &amp; PaaS
 cargo run build
 ```
 
-**IMPORTANT**: `cargo build` will fail because we have to use [cargo-xtask](https://github.com/matklad/cargo-xtask/) to build the ./components/ folder before building the project.
+**IMPORTANT**: `cargo build` will fail because we have to use [cargo-xtask](https://github.com/matklad/cargo-xtask/) to build the ./components/ folder before building the project. Reason: Cargo's build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
 
 ## CLI
 
@@ -30,13 +30,11 @@ cargo run start
 cargo run stop
 ```
 
-### Deploy
+### Deploy (WIP)
 
 ```sh
 cargo run deploy
 ```
-
-NOTE: We opted for [cargo-xtask](https://github.com/matklad/cargo-xtask) because Cargo build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
 
 ## Development Server
 
@@ -44,9 +42,17 @@ NOTE: We opted for [cargo-xtask](https://github.com/matklad/cargo-xtask) because
 RUST_LOG=info cargo run --package development_server
 ```
 
-### Logging
+## Logging
 
 We use [env_logger](https://docs.rs/env_logger/0.10.0/env_logger/) for logging. Please see their documentation for more information on setting custom log levels, filtering, and more.
+
+Basic example usage:
+
+```sh
+RUST_LOG=info cargo run start
+RUST_LOG=debug cargo run stop
+RUST_LOG=error cargo run deploy
+```
 
 ## Community & Contributing & Help
 
