@@ -190,7 +190,7 @@ Cannot continue.",
 fn start_server(http_port: &u16, rpc_port: &u16) -> (LSPClient, impl Future<Output = ()>) {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let mut process = Command::new(cargo)
-        .env("RUST_LOG", "warn")
+        .env("RUST_LOG", "info")
         .current_dir(project_root())
         .args(&[
             "run",
