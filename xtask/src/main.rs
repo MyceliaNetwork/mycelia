@@ -188,7 +188,10 @@ fn build_component(guest: &Guest) -> Result<(), DynError> {
         &dir_components().display(),
         guest.name
     );
-    print!("{} {} {}", cmd_wasm_guest, cmd_wasi_snapshot, cmd_component_output);
+    print!(
+        "{} {} {}",
+        cmd_wasm_guest, cmd_wasi_snapshot, cmd_component_output
+    );
     let status = Command::new(wasm_tools)
         .current_dir(project_root())
         .args(&[
