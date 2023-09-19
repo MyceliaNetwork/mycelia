@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use log::{debug, error, info};
 use std::{
     env,
     future::Future,
@@ -110,7 +111,7 @@ async fn server_listening(address: String) -> Result<(), DynError> {
     if let Err(e) = client.await {
         match e.to_string().as_str() {
             "transport error" => {
-                println!("Server not yet started");
+                debug!("Server not yet started");
                 return Ok(());
             }
             _ => Err(e.into()),
@@ -127,10 +128,10 @@ async fn server_listening(address: String) -> Result<(), DynError> {
         match response.into_inner() {
             EchoReply { message } => {
                 if message == echo {
-                    println!("Development server already listening");
+                    debug!("Development server already listening");
                     return Err("Development server already listening".into());
                 } else {
-                    println!("Error echoing message to RPC server");
+                    error!("Error echoing message to RPC server");
                     return Ok(());
                 }
             }
@@ -144,7 +145,7 @@ async fn poll_server_listening() -> Result<(), DynError> {
 
     loop {
         if let Err(_) = server_listening("http://127.0.0.1:50051".to_string()).await {
-            println!("Development server listening x");
+            info!("Development server listening x");
             return Ok(());
         }
 
@@ -196,7 +197,7 @@ fn start_server(
         .expect("Unable to spawn process");
 
     let proc_id = process.id().expect("Unable to fetch process id");
-    println!("proc id: {}", proc_id);
+    info!("proc id: {}", proc_id);
 
     let stdin = process.stdin.take().unwrap();
     let stdout = process.stdout.take().unwrap();
@@ -208,13 +209,13 @@ fn start_server(
     let (tx_send, rx_send) = unbounded_channel::<Vec<u8>>();
     let (tx_recv, rx_recv) = unbounded_channel::<Vec<u8>>();
 
-    println!("setting up tx,rx");
+    info!("setting up tx,rx");
     // This future waits for handlers to exit, we don't want to await it here.
     // Return it instead so the caller can await it.
     let wait = setup_listeners(reader, writer, rx_send, rx_recv);
 
     // Send initialize request
-    println!("initialize request");
+    debug!("initialize request");
     tx_send.send("initialize".as_bytes().to_vec()).ok();
     let client = LSPClient { _process: process };
 
@@ -232,13 +233,13 @@ async fn setup_listeners(
             // Wait until a message is available instead of constantly polling for a message.
             match rx_recv.recv().await {
                 Some(data) => {
-                    println!("rx_recv got: {:?}", String::from_utf8(data));
+                    info!("rx_recv got: {:?}", String::from_utf8(data));
 
                     let mut buf = String::new();
                     let _ = reader.read_line(&mut buf);
                 }
                 None => {
-                    println!("rx_recv: quitting loop");
+                    debug!("rx_recv: quitting loop");
                     break;
                 }
             }
@@ -250,14 +251,14 @@ async fn setup_listeners(
             // Wait until a message is available instead of constantly polling for a message.
             match rx_send.recv().await {
                 Some(data) => {
-                    println!("rx_send: got something");
+                    info!("rx_send: got something");
                     let str = String::from_utf8(data).expect("invalid data for parse");
-                    println!("rx_send: sending to LSP: {:?}", str);
+                    info!("rx_send: sending to LSP: {:?}", str);
 
                     _ = writer.write_all(str.as_bytes());
                 }
                 None => {
-                    println!("rx_recv: quitting loop");
+                    debug!("rx_recv: quitting loop");
                     break;
                 }
             }
@@ -286,18 +287,18 @@ async fn start(
     if let Ok(_) = server_listening(rpc_addr.clone()).await {
         trigger(domain, http_port, rpc_port, open_browser).await;
 
-        println!("HTTP development server listening on {}", http_addr);
-        println!("RPC server listening on {}", rpc_addr);
+        debug!("HTTP development server listening on {}", http_addr);
+        debug!("RPC server listening on {}", rpc_addr);
     }
 
     if *open_browser {
         poll_server_listening().await?;
         match open::that(&http_addr) {
-            Ok(()) => println!("Opened '{}' in your default browser.", http_addr),
-            Err(err) => eprintln!("An error occurred when opening '{}': {}", http_addr, err),
+            Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
+            Err(err) => error!("An error occurred when opening '{}': {}", http_addr, err),
         }
     } else {
-        println!("You can reach the development server on {}", http_addr);
+        debug!("You can reach the development server on {}", http_addr);
     }
 
     Ok(())
@@ -305,7 +306,7 @@ async fn start(
 
 async fn stop(domain: &str, rpc_port: &u16) -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = try_stop(domain, rpc_port).await {
-        eprintln!("{}", e);
+        error!("{}", e);
 
         std::process::exit(-1);
     }
@@ -314,7 +315,7 @@ async fn stop(domain: &str, rpc_port: &u16) -> Result<(), Box<dyn std::error::Er
 }
 
 async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
-    println!("Stopping development server");
+    debug!("Stopping development server");
     let address = format!("http://{}:{}", domain, rpc_port);
     let client = DevelopmentClient::connect(address.clone()).await;
     match client {
@@ -325,13 +326,13 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
 
             match response.into_inner() {
                 Success {} => {
-                    println!("Successfully stopped development server");
+                    debug!("Successfully stopped development server");
                 }
             }
         }
         Err(e) => {
             if e.to_string() == "transport error" {
-                println!("Server already stopped");
+                debug!("Server already stopped");
                 return Ok(());
             } else {
                 return Err(e.into());
@@ -344,10 +345,9 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
     if let Err(e) = try_main().await {
-        eprintln!("{}", e);
-
-        // std::process::exit(-1);
+        error!("{}", e);
     }
 
     Ok(())

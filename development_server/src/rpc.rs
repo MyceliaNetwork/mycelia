@@ -45,6 +45,8 @@ impl Development for RpcServer {
         &self,
         request: tonic::Request<EchoRequest>,
     ) -> Result<tonic::Response<EchoReply>, tonic::Status> {
+        println!("received echo cmd. message",);
+
         Ok(tonic::Response::new(EchoReply {
             message: request.into_inner().message,
         }))
