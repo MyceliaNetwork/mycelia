@@ -229,7 +229,7 @@ async fn setup_listeners(
     stdout_reader: BufReader<ChildStdout>,
     stderr_reader: BufReader<ChildStderr>,
 ) {
-    let handle_recv = tokio::spawn(async move {
+    let handle_stdout = tokio::spawn(async move {
         let mut reader = stdout_reader.lines();
         loop {
             match reader.next_line().await {
@@ -240,7 +240,7 @@ async fn setup_listeners(
         }
     });
 
-    let handle_send = tokio::spawn(async move {
+    let handle_stderr = tokio::spawn(async move {
         let mut reader = stderr_reader.lines();
         loop {
             match reader.next_line().await {
@@ -253,8 +253,8 @@ async fn setup_listeners(
     // Wait for a handler to exit. You already spawned the handlers, you don't need to spawn them again.
     // I'm using select instead of join so we can see any errors immediately.
     tokio::select! {
-        recv = handle_recv => println!("recv: {:?}", recv),
-        send = handle_send => println!("send: {:?}", send),
+        recv = handle_stdout => info!("recv: {:?}", recv),
+        send = handle_stderr => info!("send: {:?}", send),
     };
 }
 
@@ -330,7 +330,7 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "info")
+        env::set_var("RUST_LOG", "debug")
     }
 
     env_logger::init();
@@ -363,7 +363,7 @@ async fn try_main() -> Result<(), DynError> {
             let _ = stop(domain, rpc_port).await;
         }
         Commands::Deploy => {
-            println!("TODO: deploy");
+            todo!("Commands::Deploy");
         }
     }
 
