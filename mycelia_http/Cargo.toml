@@ -12,3 +12,6 @@ async-trait = { workspace = true }
 anyhow = { workspace = true }
 tower = { version = "0.4.13", features = ["util"] }
 thiserror = { workspace = true }
+
+# TODO this should only be included when targeting !wasm
+hyper = "0.14.27"

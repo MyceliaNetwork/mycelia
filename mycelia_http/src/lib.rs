@@ -1,18 +1,18 @@
 // TODO move into own package
 pub mod mycelia_core {
-  use tower::util::BoxService;
-  use thiserror::Error;
+    use thiserror::Error;
+    use tower::util::BoxService;
 
-  #[derive(Error, Debug)]
-  pub enum ServiceError {
-    #[error("wait and try again")]
-    NotReady,
-    #[error("unknown failure")]
-    Unknown,
-  }
-  pub type HostResourceIdProvider = BoxService<(),  u32, ServiceError>;
+    #[derive(Error, Debug)]
+    pub enum ServiceError {
+        #[error("wait and try again")]
+        NotReady,
+        #[error("unknown failure")]
+        Unknown,
+    }
+    pub type HostResourceIdProvider = BoxService<(), u32, ServiceError>;
 
-  pub struct MyceliaContext;
+    pub struct MyceliaContext;
 }
 
 use thiserror::Error;
@@ -25,79 +25,110 @@ pub enum ClientServiceError {
 }
 
 pub mod host {
-    use anyhow::{anyhow, Context};
+    use std::collections::HashMap;
+
     use async_trait::async_trait;
 
     use tower::{util::BoxService, Service, ServiceExt};
+    use wasmtime::component::{Component, Linker, Resource};
     use wasmtime::Store;
-    use wasmtime::component::{Resource, ResourceAny, Linker, Component};
 
     use crate::{mycelia_core::HostResourceIdProvider, ClientServiceError};
 
+    use self::bindgen::mycelia_alpha::http::interfaces::HostClient as HostClientInterface;
+    use self::bindgen::mycelia_alpha::http::interfaces::{Client, ClientRequest, ClientResult};
     use self::bindgen::Command;
-    use self::bindgen::mycelia_alpha::http::interfaces::{ClientResult, ClientRequest, Client};
-    use self::bindgen::mycelia_alpha::http::interfaces::HostClient;
 
     // this helps with syntax completion
     mod bindgen {
-      use wasmtime::component::*;
+        use wasmtime::component::*;
 
-      bindgen!({
-        world: "command",
-        async: true
-      });
+        bindgen!({
+          world: "command",
+          async: true
+        });
     }
 
-    pub type HostClientService = BoxService<ClientRequest, ClientResult, ClientServiceError>;
+    use thiserror::Error;
+    #[derive(Error, Debug)]
+    pub enum ClientMakeError {
+        #[error("resource not found")]
+        NotFound,
+        #[error("unknown failure")]
+        Unknown,
+    }
+
+    pub type HostClient = BoxService<ClientRequest, ClientResult, ClientServiceError>;
+    pub type HostClientMaker = BoxService<(), HostClient, ClientMakeError>;
+
+    // TODO we need to support callbacks for drop
     pub struct HostClientResource {
-      client: HostClientService,
-      host_id_client: HostResourceIdProvider
+        pub host_id_client: HostResourceIdProvider,
+        pub client_maker: BoxService<(), HostClient, ClientMakeError>,
+        pub clients: HashMap<u32, HostClient>,
     }
 
     impl HostClientResource {
-      pub fn new(client: HostClientService, host_id_client: HostResourceIdProvider) -> Self {
-        Self {
-          client, host_id_client
+        pub fn new(client_maker: HostClientMaker, host_id_client: HostResourceIdProvider) -> Self {
+            Self {
+                host_id_client,
+                client_maker,
+                clients: Default::default(),
+            }
         }
-      }
     }
 
     #[async_trait]
-    impl HostClient for HostClientResource {
-      async fn new(&mut self) -> anyhow::Result<Resource<Client>> {
-        let rdy_client = self.host_id_client.ready().await?;
-        Ok(Resource::new_own(rdy_client.call(()).await?))
-      }
+    impl HostClientInterface for HostClientResource {
+        async fn new(&mut self) -> anyhow::Result<Resource<Client>> {
+            let rdy_client = self.host_id_client.ready().await?;
+            Ok(Resource::new_own(rdy_client.call(()).await?))
+        }
 
-      async fn send(&mut self, _guest_self: Resource<Client>, req: ClientRequest) -> anyhow::Result<ClientResult> {
-        let rdy_client = self.client.ready().await?;
-        Ok(rdy_client.call(req).await?)
-      }
+        async fn send(
+            &mut self,
+            guest_self: Resource<Client>,
+            req: ClientRequest,
+        ) -> anyhow::Result<ClientResult> {
+            let id = guest_self.rep();
+            let client = self.clients.get_mut(&id).ok_or(ClientMakeError::NotFound)?;
+            let client = client.ready().await?;
+            Ok(client.call(req).await?)
+        }
 
-      fn drop(&mut self, _val : Resource<Client>) -> anyhow::Result<()> {
-        Ok(())
-      }
+        fn drop(&mut self, _val: Resource<Client>) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
-    impl bindgen::mycelia_alpha::http::types::Host for HostClientResource {
-
-    }
-
-    impl bindgen::mycelia_alpha::http::interfaces::Host for HostClientResource {
-
-    }
+    impl bindgen::mycelia_alpha::http::types::Host for HostClientResource {}
+    impl bindgen::mycelia_alpha::http::interfaces::Host for HostClientResource {}
 
     pub trait HostClientResourceMaker {
-      fn new(&mut self) -> anyhow::Result<&mut HostClientResource>;
+        fn new(&mut self) -> anyhow::Result<&mut HostClientResource>;
     }
 
-    pub async fn instantiate_async<T: HostClientResourceMaker + Send>(store: &mut Store<T>, component: &Component, linker: &mut Linker<T>) -> anyhow::Result<()> {
-      let _ = Command::add_to_linker::<T, HostClientResource>(linker, |v| {
-        v.new().expect("failed to produce new host client resource")
-      })?;
+    pub async fn setup_with_wasmtime<T: HostClientResourceMaker + Send>(
+        store: &mut Store<T>,
+        component: &Component,
+        linker: &mut Linker<T>,
+    ) -> anyhow::Result<()> {
+        let _ = Command::add_to_linker::<T, HostClientResource>(linker, |v| {
+            v.new().expect("failed to produce new host client resource")
+        })?;
 
-      let _ = bindgen::Command::instantiate_async(store, component, linker).await?;
+        let _ = bindgen::Command::instantiate_async(store, component, linker).await?;
 
-      Ok(())
+        Ok(())
+    }
+}
+
+pub mod providers {
+    pub mod hyper {
+        use std::collections::HashMap;
+
+        use tower::{util::BoxService, ServiceExt};
+
+        use crate::{host::{HostClientResourceMaker, HostClientResource}, mycelia_core::HostResourceIdProvider};
     }
 }
