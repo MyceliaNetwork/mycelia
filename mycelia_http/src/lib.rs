@@ -25,13 +25,11 @@ pub enum ClientServiceError {
 }
 
 pub mod host {
-    use thiserror::Error;
-
-    use anyhow::anyhow;
+    use anyhow::{anyhow, Context};
     use async_trait::async_trait;
 
     use tower::{util::BoxService, Service, ServiceExt};
-    use wasmtime::{Store};
+    use wasmtime::Store;
     use wasmtime::component::{Resource, ResourceAny, Linker, Component};
 
     use crate::{mycelia_core::HostResourceIdProvider, ClientServiceError};
@@ -51,20 +49,28 @@ pub mod host {
     }
 
     pub type HostClientService = BoxService<ClientRequest, ClientResult, ClientServiceError>;
-    struct HostClientResource {
+    pub struct HostClientResource {
       client: HostClientService,
       host_id_client: HostResourceIdProvider
+    }
+
+    impl HostClientResource {
+      pub fn new(client: HostClientService, host_id_client: HostResourceIdProvider) -> Self {
+        Self {
+          client, host_id_client
+        }
+      }
     }
 
     #[async_trait]
     impl HostClient for HostClientResource {
       async fn new(&mut self) -> anyhow::Result<Resource<Client>> {
-        let mut rdy_client = self.host_id_client.ready().await?;
+        let rdy_client = self.host_id_client.ready().await?;
         Ok(Resource::new_own(rdy_client.call(()).await?))
       }
 
       async fn send(&mut self, _guest_self: Resource<Client>, req: ClientRequest) -> anyhow::Result<ClientResult> {
-        let mut rdy_client = self.client.ready().await?;
+        let rdy_client = self.client.ready().await?;
         Ok(rdy_client.call(req).await?)
       }
 
@@ -73,9 +79,23 @@ pub mod host {
       }
     }
 
-    pub async fn instantiate_async<T: Send + bindgen::mycelia_alpha::http::types::Host + bindgen::mycelia_alpha::http::interfaces::Host>(store: &mut Store<T>, component: &Component, linker: &mut Linker<T>) -> anyhow::Result<()> {
+    impl bindgen::mycelia_alpha::http::types::Host for HostClientResource {
 
-      Command::add_to_linker(linker, |v| v);
+    }
+
+    impl bindgen::mycelia_alpha::http::interfaces::Host for HostClientResource {
+
+    }
+
+    pub trait HostClientResourceMaker {
+      fn new(&mut self) -> anyhow::Result<&mut HostClientResource>;
+    }
+
+    pub async fn instantiate_async<T: HostClientResourceMaker + Send>(store: &mut Store<T>, component: &Component, linker: &mut Linker<T>) -> anyhow::Result<()> {
+      let _ = Command::add_to_linker::<T, HostClientResource>(linker, |v| {
+        v.new().expect("failed to produce new host client resource")
+      })?;
+
       let _ = bindgen::Command::instantiate_async(store, component, linker).await?;
 
       Ok(())
