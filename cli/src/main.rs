@@ -1,16 +1,15 @@
 use clap::{Parser, Subcommand};
 use log::{debug, error, info};
-use core::panic;
+
 use std::{
     env,
     future::Future,
     path::{Path, PathBuf},
-    process::Stdio, time::Duration,
+    process::Stdio,
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter, AsyncReadExt},
-    process::{Child, ChildStdin, ChildStdout, Command, ChildStderr},
-    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    process::{Child, ChildStderr, ChildStdout, Command},
 };
 
 pub mod development {
@@ -159,8 +158,7 @@ async fn poll_server_listening() -> Result<(), DynError> {
 }
 
 async fn trigger(domain: &String, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
-    let (client, wait) =
-        start_server(domain, http_port, rpc_port, open_browser);
+    let (client, wait) = start_server(domain, http_port, rpc_port, open_browser);
 
     // Spin off child process to make sure it can make process on its own
     // while we read its output
@@ -169,7 +167,10 @@ async fn trigger(domain: &String, http_port: &u16, rpc_port: &u16, open_browser:
 
     // todo tokio select on this
     let task_handle = tokio::spawn(async move {
-        let status = process.wait().await.expect("development server process encountered an error");
+        let status = process
+            .wait()
+            .await
+            .expect("development server process encountered an error");
         info!("Process exited {:#?}. Cannot continue.", status);
     });
 
@@ -183,10 +184,7 @@ fn start_server(
     http_port: &u16,
     rpc_port: &u16,
     _open_browser: &bool,
-) -> (
-    LSPClient,
-    impl Future<Output = ()>,
-) {
+) -> (LSPClient, impl Future<Output = ()>) {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let mut process = Command::new(cargo)
         .env("RUST_LOG", "info")
@@ -225,8 +223,8 @@ fn start_server(
 }
 
 async fn setup_listeners(
-    mut stdout_reader: BufReader<ChildStdout>,
-    mut stderr_reader: BufReader<ChildStderr>,
+    stdout_reader: BufReader<ChildStdout>,
+    stderr_reader: BufReader<ChildStderr>,
 ) {
     let handle_stdout = tokio::spawn(async move {
         let mut reader = stdout_reader.lines();
@@ -234,8 +232,8 @@ async fn setup_listeners(
             match reader.next_line().await {
                 Ok(Some(string)) => {
                     info!("LOG {}", string);
-                },
-                Ok(None) => {},
+                }
+                Ok(None) => {}
                 Err(_) => todo!(),
             }
         }
@@ -247,8 +245,8 @@ async fn setup_listeners(
             match reader.next_line().await {
                 Ok(Some(string)) => {
                     info!("LOG {}", string);
-                },
-                Ok(None) => {},
+                }
+                Ok(None) => {}
                 Err(_) => todo!(),
             }
         }
