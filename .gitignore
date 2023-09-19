@@ -24,3 +24,5 @@ prod.db/
 env
 .pws
 grf.yml
+expanded.rs
+**/deps/**

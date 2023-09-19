@@ -1,0 +1,60 @@
+package mycelia-alpha:http
+
+interface types {
+  type status = u16
+  variant method {
+    get,
+    head,
+    post,
+    put,
+    delete,
+    connect,
+    options,
+    trace,
+    patch,
+    other(string)
+  }
+
+  type headers = list<tuple<string, string>>
+  type body = list<u8>
+  type uri = string
+
+
+  // Used for producing requests only
+  record options {
+    timeout-ms: option<u32>,
+  }
+
+  record client-request {
+    method: method,
+    headers: headers,
+    body: body,
+    uri: uri,
+  }
+
+  record client-response {
+    status: status,
+    headers: headers,
+    body: body,
+  }
+
+  variant client-result {
+    ok(client-response),
+    error(string)
+  }
+}
+
+interface interfaces {
+  use types.{client-request, client-result}
+  resource client {
+    constructor()
+    send: func(req: client-request) -> client-result
+  }
+}
+
+world command {
+  import interfaces
+
+  // parameter is passed from guest to host
+  // result is returned to guest from host
+}

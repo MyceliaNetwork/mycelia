@@ -8,6 +8,7 @@ mod bindgen {
     });
 }
 
+struct Test;
 pub mod types {
     pub type HttpRequest = crate::bindgen::mycelia::execution::types::HttpRequest;
     pub type HttpResponse = crate::bindgen::mycelia::execution::types::HttpResponse;
@@ -337,6 +338,9 @@ mod test {
             body: vec![2, 4, 6],
             uri: "foo".into(),
         };
+
+        let res = bindings.exports().call_produce(&mut store).await?;
+        let t = res.ty();
 
         let result: HttpResponse = bindings
             .call_handle_request(&mut store, &should_echo)

@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 tokio = { version = "1.32.0", features = ["full"] }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main", features = ["component-model"] }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main"}
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true}
 tower = { version = "0.4.13", features = ["full"] }
 wasmtime_components = {path = "../../wasmtime_components"}
 http = "0.2.9"

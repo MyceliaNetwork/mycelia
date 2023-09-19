@@ -1671,6 +1671,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mycelia_http"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "thiserror",
+ "tower",
+ "wasmtime",
+ "wasmtime-wasi",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"

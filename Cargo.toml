@@ -7,6 +7,8 @@ members = [
   "development_server",
   "wasmtime_components",
 
+  "mycelia_http",
+
   # Services
   "services/function",
 
@@ -21,3 +23,6 @@ anyhow = "1.0.75"
 async-trait = "0.1.73"
 log = "0.4.20"
 env_logger = "0.9.0"
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main", features = ["component-model"] }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main"}
+thiserror = "1.0.48"

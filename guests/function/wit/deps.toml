@@ -1,3 +1,1 @@
-# Use `wit-deps update` to pull in latest changes from "dynamic" branch references
-clocks = "https://github.com/WebAssembly/wasi-clocks/archive/main.tar.gz"
-http = "https://github.com/WebAssembly/wasi-http/archive/main.tar.gz"
+preview = "https://gitpkg.now.sh/bytecodealliance/wasmtime/crates/wasi?e250334b8ebfba9359802ab7f61bdd7c6085d87a"

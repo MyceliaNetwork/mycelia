@@ -50,10 +50,16 @@ interface types {
 }
 
 world function-world {
-  import wasi:clocks/wall-clock
-  import wasi:io/streams
-  
   use types.{http-request, http-response}
+  import mycelia-alpha:http/http-client
+
+  export exports: interface {
+    resource foo-bar {
+      echo: func(v: string) -> string
+    }
+
+    produce: func() -> own<foo-bar>
+  }
 
   export handle-request: func(req: http-request) -> http-response
 }
