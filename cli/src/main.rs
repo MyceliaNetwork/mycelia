@@ -180,7 +180,7 @@ fn start_server(
 ) {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let mut process = Command::new(cargo)
-        .env("RUST_LOG", "info")
+        .env("RUST_LOG", "trace")
         .current_dir(project_root())
         .args(&[
             "run",
