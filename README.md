@@ -46,12 +46,16 @@ RUST_LOG=info cargo run --package development_server
 
 We use [env_logger](https://docs.rs/env_logger/0.10.0/env_logger/) for logging. Please see their documentation for more information on setting custom log levels, filtering, and more.
 
+Default CLI log level is `warn`.
+
 Basic example usage:
 
 ```sh
+RUST_LOG=error cargo run start
+RUST_LOG=warn cargo run start # default
+RUST_LOG=debug cargo run start
 RUST_LOG=info cargo run start
-RUST_LOG=debug cargo run stop
-RUST_LOG=error cargo run deploy
+RUST_LOG=trace cargo run start
 ```
 
 ## Community & Contributing & Help

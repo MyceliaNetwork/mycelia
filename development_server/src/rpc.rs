@@ -45,11 +45,10 @@ impl Development for RpcServer {
         &self,
         request: tonic::Request<EchoRequest>,
     ) -> Result<tonic::Response<EchoReply>, tonic::Status> {
-        info!("received echo cmd. message",);
+        let message = request.into_inner().message;
+        info!("Received Echo. message: {:?}", message);
 
-        Ok(tonic::Response::new(EchoReply {
-            message: request.into_inner().message,
-        }))
+        Ok(tonic::Response::new(EchoReply { message }))
     }
 
     async fn deploy_component(
