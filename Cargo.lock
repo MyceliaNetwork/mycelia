@@ -407,6 +407,7 @@ dependencies = [
  "log",
  "open",
  "prost",
+ "thiserror",
  "tokio",
  "tonic",
  "tonic-build",
