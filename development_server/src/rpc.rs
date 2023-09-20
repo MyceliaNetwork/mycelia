@@ -58,7 +58,6 @@ impl Development for RpcServer {
         info!("received deploy_component cmd");
         let request = request.into_inner();
         let component_path = request.component_path;
-
         let (reply, rx) = oneshot::channel();
         let cmd = ServiceCommand::SwapFunctionComponent {
             component_path,
