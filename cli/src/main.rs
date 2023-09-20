@@ -172,12 +172,13 @@ async fn server_listening(address: String) -> Result<(), DynError> {
     }
 }
 
-async fn poll_server_listening() -> Result<(), DynError> {
+async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     let start = Instant::now();
     let timeout = Duration::from_secs(5);
 
     loop {
-        if let Err(_) = server_listening("http://127.0.0.1:50051".to_string()).await {
+        let rpc_addr = format!("http://{}:{}", domain, rpc_port);
+        if let Err(_) = server_listening(rpc_addr).await {
             warn!("Development server listening");
             return Ok(());
         }
@@ -193,7 +194,7 @@ async fn poll_server_listening() -> Result<(), DynError> {
 async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
     let http_addr = format!("http://{}:{}", domain, http_port);
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
-    let (mut client, wait) = start_server(http_port, rpc_port);
+    let (mut client, wait) = start_development_server(http_port, rpc_port);
 
     // Spin off child process to make sure it can make process on its own
     // while we read its output
@@ -204,7 +205,7 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
             .await
             .expect("development server process encountered an error");
 
-        info!(
+        error!(
             "Process exited. Cannot continue. Error:
 
 {:#?}",
@@ -212,23 +213,23 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
         );
     });
 
-    warn!("Started development server");
+    info!("Started development server");
     debug!("HTTP development server listening on {}", http_addr);
     debug!("RPC server listening on {}", rpc_addr);
 
     if *open_browser {
-        let _ = poll_server_listening().await;
+        let _ = poll_server_listening(domain, rpc_port).await;
         match open::that(&http_addr) {
             Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
             Err(err) => error!("An error occurred when opening '{}': {}", http_addr, err),
         }
     } else {
-        debug!("You can reach the development server on {}", http_addr);
+        info!("You can reach the development server on {}", http_addr);
     }
 
     return tokio::select! {
         // Wait for the handlers to exit. Currently this will never happen
-        wait = wait => info!("wait {:?}", wait),
+        wait = wait => trace!("wait {:?}", wait),
         task_handle = task_handle => {
             match task_handle {
                 Ok(_) => std::process::exit(-1),
@@ -238,7 +239,7 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
     };
 }
 
-fn start_server(
+fn start_development_server(
     http_port: &u16,
     rpc_port: &u16,
 ) -> (DevelopmentServerClient, impl Future<Output = ()>) {
@@ -261,7 +262,7 @@ fn start_server(
         .expect("Unable to spawn process");
 
     let proc_id = process.id().expect("Unable to fetch process id");
-    info!("proc id: {}", proc_id);
+    trace!("proc id: {}", proc_id);
 
     let stdout = process.stdout.take().unwrap();
     let stdout_reader = BufReader::new(stdout);
@@ -319,13 +320,13 @@ async fn start(
     rpc_port: &u16,
     open_browser: &bool,
 ) -> Result<(), DynError> {
-    warn!("Starting development server");
+    info!("Starting development server");
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
 
-    match server_listening(rpc_addr.clone()).await {
+    match server_listening(rpc_addr).await {
         Ok(_) => spawn_client(domain, http_port, rpc_port, open_browser).await,
         Err(e) => {
-            warn!("Listening Error: {:?}", e);
+            error!("Listening Error: {:?}", e);
         }
     }
 
@@ -343,7 +344,7 @@ async fn stop(domain: &str, rpc_port: &u16) -> Result<(), Box<dyn std::error::Er
 }
 
 async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
-    warn!("Stopping development server");
+    info!("Stopping development server");
     let address = format!("http://{}:{}", domain, rpc_port);
     let client = DevelopmentClient::connect(address.clone()).await;
     match client {
@@ -353,9 +354,7 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
             let response = client.stop_server(request).await?;
 
             match response.into_inner() {
-                Success {} => {
-                    warn!("Stopped development server");
-                }
+                Success {} => warn!("Stopped development server"),
             }
         }
         Err(err) => {
