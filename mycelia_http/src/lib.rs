@@ -23,9 +23,9 @@ pub enum ClientServiceError {
     #[error("unknown failure")]
     Unknown,
     #[error("client error")]
-    ClientError { cause : String },
+    ClientError { cause: String },
     #[error("guest produced a malformed request")]
-    BadRequest
+    BadRequest,
 }
 
 pub mod host {
@@ -39,12 +39,12 @@ pub mod host {
 
     use crate::{mycelia_core::HostResourceIdProvider, ClientServiceError};
 
-    use self::bindgen::mycelia_alpha::http::interfaces::HostClient as HostClientInterface;
     use self::bindgen::mycelia_alpha::http::interfaces::Client;
+    use self::bindgen::mycelia_alpha::http::interfaces::HostClient as HostClientInterface;
     use self::bindgen::Command;
 
     pub use self::bindgen::mycelia_alpha::http::interfaces::{ClientRequest, ClientResult};
-    pub use self::bindgen::mycelia_alpha::http::types::{Method, ClientResponse};
+    pub use self::bindgen::mycelia_alpha::http::types::{ClientResponse, Method};
     // this helps with syntax completion
     mod bindgen {
         use wasmtime::component::*;
@@ -141,16 +141,23 @@ pub mod host {
 pub mod providers {
 
     pub mod hyper {
-        use std::{pin::Pin, future::Future, io::Bytes};
+        use std::{future::Future, io::Bytes, pin::Pin};
 
         use anyhow::anyhow;
-        use hyper::{client::HttpConnector, Request, Body, Response, Method, body::HttpBody};
-        use tower::{service_fn, ServiceBuilder, util::BoxService, Service, BoxError, ServiceExt};
+        use hyper::{body::HttpBody, client::HttpConnector, Body, Method, Request, Response};
+        use tower::{service_fn, util::BoxService, BoxError, Service, ServiceBuilder, ServiceExt};
 
-        use crate::{host::{HostClientResourceMaker, HostClientResource, HostClientMaker, HostClient, ClientRequest, ClientResult, ClientResponse}, mycelia_core::HostResourceIdProvider, ClientServiceError};
+        use crate::{
+            host::{
+                ClientRequest, ClientResponse, ClientResult, HostClient, HostClientMaker,
+                HostClientResource, HostClientResourceMaker,
+            },
+            mycelia_core::HostResourceIdProvider,
+            ClientServiceError,
+        };
 
         pub struct HyperClientResourceMaker {
-            inner : HostClientResource
+            inner: HostClientResource,
         }
 
         impl HostClientResourceMaker for HyperClientResourceMaker {
@@ -160,7 +167,7 @@ pub mod providers {
             }
         }
 
-        pub fn new(id_provider : HostResourceIdProvider) -> HyperClientResourceMaker {
+        pub fn new(id_provider: HostResourceIdProvider) -> HyperClientResourceMaker {
             let client_maker = new_client_maker();
 
             let inner = HostClientResource::new(client_maker, id_provider);
@@ -169,7 +176,7 @@ pub mod providers {
         }
 
         fn new_client_maker() -> HostClientMaker {
-            let service = ServiceBuilder::new().service_fn(|v : ()| async {
+            let service = ServiceBuilder::new().service_fn(|v: ()| async {
                 let service = HyperHostClient;
 
                 Ok(service.boxed())
@@ -187,7 +194,10 @@ pub mod providers {
 
             type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-            fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+            fn poll_ready(
+                &mut self,
+                cx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Result<(), Self::Error>> {
                 std::task::Poll::Ready(Ok(()))
             }
 
@@ -201,20 +211,37 @@ pub mod providers {
                     let (parts, mut data) = resp.into_parts();
 
                     let body = read_body_stream(&mut data).await;
-                    let body = body.map_err(|_| ClientServiceError::ClientError { cause: "failed to ready body".to_string() })?;
+                    let body = body.map_err(|e| ClientServiceError::ClientError {
+                        cause: format!("failed to ready body {:#?}", e),
+                    })?;
 
                     let status = parts.status;
 
-                    let headers = parts.headers.into_iter()
-                    .map(|(k, v)| (k.map(|v| v.to_string()).unwrap_or("".to_string()), v.to_str().unwrap().to_string())).collect();
+                    let headers = parts
+                        .headers
+                        .into_iter()
+                        .map(|(k, v)| {
+                            (
+                                k.map(|v| v.to_string()).unwrap_or("".to_string()),
+                                v.to_str().unwrap().to_string(),
+                            )
+                        })
+                        .collect();
 
-                    let r = ClientResult::Ok(ClientResponse { status: status.as_u16(), headers, body });
+                    let r = ClientResult::Ok(ClientResponse {
+                        status: status.as_u16(),
+                        headers,
+                        body,
+                    });
                     Ok(r)
                 })
             }
         }
 
-        async fn make_request(client : &hyper::Client<HttpConnector>, request : ClientRequest) -> anyhow::Result<ClientResult> {
+        async fn make_request(
+            client: &hyper::Client<HttpConnector>,
+            request: ClientRequest,
+        ) -> anyhow::Result<ClientResult> {
             todo!()
         }
 
@@ -226,16 +253,13 @@ pub mod providers {
 
                 let body = Body::from(self.body);
 
-                let mut req = Request::builder()
-                    .method(method)
-                    .uri(self.uri);
+                let mut req = Request::builder().method(method).uri(self.uri);
 
-                for (k ,v) in self.headers {
+                for (k, v) in self.headers {
                     req = req.header(k, v);
                 }
 
-                req.body(body)
-                .map_err(|_| ClientServiceError::BadRequest)
+                req.body(body).map_err(|_| ClientServiceError::BadRequest)
             }
         }
 
@@ -246,9 +270,9 @@ pub mod providers {
             }
         }
 
-        static RESPONSE_LIMIT : usize = 5*1024*1024;
+        static RESPONSE_LIMIT: usize = 5 * 1024 * 1024;
 
-        async fn read_body_stream(body : &mut hyper::Body) -> anyhow::Result<Vec<u8>> {
+        async fn read_body_stream(body: &mut hyper::Body) -> anyhow::Result<Vec<u8>> {
             let mut out: Vec<u8> = vec![];
             let mut size = 0;
             while let Some(response) = body.data().await {
@@ -256,7 +280,11 @@ pub mod providers {
 
                 size += bytes.len();
                 if size > RESPONSE_LIMIT {
-                    return Err(anyhow!("attempted to stream too much data {} limit {}", size, RESPONSE_LIMIT))
+                    return Err(anyhow!(
+                        "attempted to stream too much data {} limit {}",
+                        size,
+                        RESPONSE_LIMIT
+                    ));
                 }
                 out.reserve(bytes.len());
                 out.extend_from_slice(&bytes);
@@ -265,7 +293,7 @@ pub mod providers {
             Ok(out)
         }
 
-        fn get_method(req : &ClientRequest) -> Result<Method, ClientServiceError> {
+        fn get_method(req: &ClientRequest) -> Result<Method, ClientServiceError> {
             match &req.method {
                 crate::host::Method::Get => Ok(Method::GET),
                 crate::host::Method::Head => Ok(Method::HEAD),
