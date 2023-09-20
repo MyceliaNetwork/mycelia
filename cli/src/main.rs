@@ -60,6 +60,7 @@ enum Commands {
         /// Default: localhost
         #[clap(short, long, default_value = "127.0.0.1")]
         domain: String,
+
         /// The port http server should bind to.
         /// Default: 3001
         #[clap(long, default_value = "3001")]
@@ -94,6 +95,11 @@ enum Commands {
         /// Default: localhost
         #[clap(short, long, default_value = "127.0.0.1")]
         domain: String,
+
+        /// The port http server should bind to.
+        /// Default: 3001
+        #[clap(long, default_value = "3001")]
+        http_port: u16,
 
         /// The port rpc server should bind to
         /// Default: 50051
@@ -143,10 +149,11 @@ async fn try_main() -> Result<(), DynError> {
         }
         Commands::Deploy {
             domain,
+            http_port,
             rpc_port,
             component_path,
         } => {
-            let _ = deploy(domain, rpc_port, component_path).await;
+            let _ = deploy(domain, http_port, rpc_port, component_path).await;
         }
     }
 
@@ -408,8 +415,13 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     Ok(())
 }
 
-async fn deploy(domain: &String, rpc_port: &u16, componen_path: &String) -> Result<(), DynError> {
-    if let Err(e) = try_deploy(domain, rpc_port, componen_path).await {
+async fn deploy(
+    domain: &String,
+    http_port: &u16,
+    rpc_port: &u16,
+    componen_path: &String,
+) -> Result<(), DynError> {
+    if let Err(e) = try_deploy(domain, http_port, rpc_port, componen_path).await {
         error!("{}", e);
 
         std::process::exit(-1);
@@ -420,9 +432,12 @@ async fn deploy(domain: &String, rpc_port: &u16, componen_path: &String) -> Resu
 
 async fn try_deploy(
     domain: &String,
+    http_port: &u16,
     rpc_port: &u16,
     componen_path: &String,
 ) -> Result<(), DynError> {
+    let open_browser = false;
+    start(domain, http_port, rpc_port, &open_browser).await?;
     let address = format!("http://{}:{}", domain, rpc_port);
     let client = DevelopmentClient::connect(address).await;
 
