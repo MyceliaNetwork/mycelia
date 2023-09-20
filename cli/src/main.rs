@@ -3,6 +3,7 @@ use log::{debug, error, info, warn};
 
 use std::{
     env,
+    error::Error,
     future::Future,
     path::{Path, PathBuf},
     process::Stdio,
@@ -10,6 +11,7 @@ use std::{
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, ChildStdout, Command},
+    time::{Duration, Instant},
 };
 
 pub mod development {
@@ -18,7 +20,19 @@ pub mod development {
 use development::development_client::DevelopmentClient;
 use development::{EchoReply, EchoRequest, Empty, Success};
 
-type DynError = Box<dyn std::error::Error>;
+type DynError = Box<dyn Error>;
+
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
+#[command(propagate_version = true)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+struct DevelopmentServerClient {
+    process: Child,
+}
 
 #[derive(Debug, Subcommand)]
 enum Commands {
@@ -29,18 +43,15 @@ enum Commands {
     Start {
         /// The domain to listen on.
         /// Default: localhost
-        /// TODO: add support to override (both here and in the development_server)
         #[clap(short, long, default_value = "127.0.0.1")]
         domain: String,
         /// The port http server should bind to.
         /// Default: 3001
-        /// TODO: add support to override (both here and in the development_server)
         #[clap(long, default_value = "3001")]
         http_port: u16,
 
         /// The port rpc server should bind to
         /// Default: 50051
-        /// TODO: add support to override (both here and in the development_server)
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
 
@@ -49,19 +60,16 @@ enum Commands {
         /// Possible values: true, false
         #[clap(short, long, default_value = "true")]
         open_browser: bool,
-        // TODO: add browser override list
     },
     /// Stop the Mycelia development server
     Stop {
         /// The domain to listen on.
         /// Default: localhost
-        /// TODO: add support to override (both here and in the development_server)
         #[clap(short, long, default_value = "127.0.0.1")]
         domain: String,
 
         /// The port rpc server should bind to
         /// Default: 50051
-        /// TODO: add support to override (both here and in the development_server)
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
     },
@@ -69,16 +77,47 @@ enum Commands {
     Deploy,
 }
 
-#[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
-#[command(propagate_version = true)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "debug")
+    }
+
+    env_logger::init();
+
+    if let Err(e) = try_main().await {
+        error!("{}", e);
+    }
+
+    Ok(())
 }
 
-struct LSPClient {
-    process: Child,
+async fn try_main() -> Result<(), DynError> {
+    let cli = Cli::parse();
+
+    // You can check for the existence of subcommands, and if found use their
+    // matches just as you would the top level cmd
+    match &cli.command {
+        Commands::Build => {
+            build()?;
+        }
+        Commands::Start {
+            domain,
+            http_port,
+            rpc_port,
+            open_browser,
+        } => {
+            let _ = start(domain, http_port, rpc_port, open_browser).await;
+        }
+        Commands::Stop { domain, rpc_port } => {
+            let _ = stop(domain, rpc_port).await;
+        }
+        Commands::Deploy => {
+            let _ = deploy().await;
+        }
+    }
+
+    Ok(())
 }
 
 fn build() -> Result<(), DynError> {
@@ -93,7 +132,7 @@ fn build() -> Result<(), DynError> {
             "`cargo xtask build` failed.
 
 Status code: {}",
-            status.code().unwrap()
+            status.code().expect("Build failed: no status")
         ))?;
     }
 
@@ -101,45 +140,41 @@ Status code: {}",
 }
 
 async fn server_listening(address: String) -> Result<(), DynError> {
-    // TODO: return https://doc.rust-lang.org/stable/std/task/enum.Poll.html# ?
-    // TODO: use rand string?
-    let echo = "poll_dev_server".to_string();
+    let payload = "poll_dev_server";
+    let client = DevelopmentClient::connect(address.clone()).await;
+    match client {
+        Ok(mut client) => {
+            let message = EchoRequest {
+                message: payload.to_string(),
+            };
+            let request = tonic::Request::new(message);
+            let response = client.echo(request).await?;
 
-    let client = DevelopmentClient::connect(address.clone());
-    if let Err(e) = client.await {
-        match e.to_string().as_str() {
+            match response.into_inner() {
+                EchoReply { message } => {
+                    if message == payload.to_string() {
+                        debug!("Development server already listening");
+                        return Err("Development server already listening".into());
+                    } else {
+                        error!("Error echoing message to RPC server");
+                        return Ok(());
+                    }
+                }
+            };
+        }
+        Err(err) => match err.to_string().as_str() {
             "transport error" => {
                 debug!("Server not yet started");
                 return Ok(());
             }
-            _ => Err(e.into()),
-        }
-    } else {
-        // FIXME: prevent duplicate ::connect
-        let mut client = DevelopmentClient::connect(address.clone()).await?;
-        let message = EchoRequest {
-            message: echo.clone(),
-        };
-        let payload = tonic::Request::new(message);
-        let response = client.echo(payload).await?;
-
-        match response.into_inner() {
-            EchoReply { message } => {
-                if message == echo {
-                    debug!("Development server already listening");
-                    return Err("Development server already listening".into());
-                } else {
-                    error!("Error echoing message to RPC server");
-                    return Ok(());
-                }
-            }
-        }
+            err => *Box::new(Err(err.into())),
+        },
     }
 }
 
 async fn poll_server_listening() -> Result<(), DynError> {
-    let start = tokio::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(5);
+    let start = Instant::now();
+    let timeout = Duration::from_secs(5);
 
     loop {
         if let Err(_) = server_listening("http://127.0.0.1:50051".to_string()).await {
@@ -147,7 +182,7 @@ async fn poll_server_listening() -> Result<(), DynError> {
             return Ok(());
         }
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
 
         if start.elapsed() > timeout {
             Err("Timeout waiting for server to start")?;
@@ -187,7 +222,10 @@ Cannot continue.",
     }
 }
 
-fn start_server(http_port: &u16, rpc_port: &u16) -> (LSPClient, impl Future<Output = ()>) {
+fn start_server(
+    http_port: &u16,
+    rpc_port: &u16,
+) -> (DevelopmentServerClient, impl Future<Output = ()>) {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let log_level = env::var("RUST_LOG").expect("env::var RUST_LOG not set");
     let mut process = Command::new(cargo)
@@ -221,7 +259,7 @@ fn start_server(http_port: &u16, rpc_port: &u16) -> (LSPClient, impl Future<Outp
 
     // Send initialize request
     debug!("initialize request");
-    let client = LSPClient { process };
+    let client = DevelopmentServerClient { process };
 
     (client, wait)
 }
@@ -304,10 +342,10 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     let address = format!("http://{}:{}", domain, rpc_port);
     let client = DevelopmentClient::connect(address.clone()).await;
     match client {
-        Ok(_) => {
-            let mut client = DevelopmentClient::connect(address.clone()).await?;
-            let payload = tonic::Request::new(Empty {});
-            let response = client.stop_server(payload).await?;
+        Ok(mut client) => {
+            // let mut client = DevelopmentClient::connect(address.clone()).await?;
+            let request = tonic::Request::new(Empty {});
+            let response = client.stop_server(request).await?;
 
             match response.into_inner() {
                 Success {} => {
@@ -315,66 +353,28 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
                 }
             }
         }
-        Err(e) => {
-            if e.to_string() == "transport error" {
-                debug!("Server already stopped");
-                return Ok(());
-            } else {
-                return Err(e.into());
-            }
+        Err(err) => {
+            return match err.to_string().as_str() {
+                "transport error" => {
+                    debug!("Server not yet started");
+                    return Ok(());
+                }
+                err => *Box::new(Err(err.into())),
+            };
         }
-    }
+    };
 
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "debug")
-    }
-
-    env_logger::init();
-
-    if let Err(e) = try_main().await {
-        error!("{}", e);
-    }
-
-    Ok(())
-}
-
-async fn try_main() -> Result<(), DynError> {
-    let cli = Cli::parse();
-
-    // You can check for the existence of subcommands, and if found use their
-    // matches just as you would the top level cmd
-    match &cli.command {
-        Commands::Build => {
-            build()?;
-        }
-        Commands::Start {
-            domain,
-            http_port,
-            rpc_port,
-            open_browser,
-        } => {
-            let _ = start(domain, http_port, rpc_port, open_browser).await;
-        }
-        Commands::Stop { domain, rpc_port } => {
-            let _ = stop(domain, rpc_port).await;
-        }
-        Commands::Deploy => {
-            todo!("Commands::Deploy");
-        }
-    }
-
-    Ok(())
+async fn deploy() -> Result<(), DynError> {
+    todo!("deploy")
 }
 
 fn project_root() -> PathBuf {
     Path::new(&env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(1)
-        .unwrap()
+        .expect("CARGO_MANIFEST_DIR not found")
         .to_path_buf()
 }
