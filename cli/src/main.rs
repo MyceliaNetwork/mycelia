@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 
 use std::{
     env,
@@ -80,7 +80,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "debug")
+        env::set_var("RUST_LOG", "warn")
     }
 
     env_logger::init();
@@ -153,7 +153,7 @@ async fn server_listening(address: String) -> Result<(), DynError> {
             match response.into_inner() {
                 EchoReply { message } => {
                     if message == payload.to_string() {
-                        debug!("Development server already listening");
+                        warn!("Development server already listening");
                         return Err("Development server already listening".into());
                     } else {
                         error!("Error echoing message to RPC server");
@@ -190,36 +190,52 @@ async fn poll_server_listening() -> Result<(), DynError> {
     }
 }
 
-async fn trigger(http_port: &u16, rpc_port: &u16) {
-    let (client, wait) = start_server(http_port, rpc_port);
+async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
+    let http_addr = format!("http://{}:{}", domain, http_port);
+    let rpc_addr = format!("http://{}:{}", domain, rpc_port);
+    let (mut client, wait) = start_server(http_port, rpc_port);
 
     // Spin off child process to make sure it can make process on its own
     // while we read its output
-
-    let mut process = client.process;
-
     let task_handle = tokio::spawn(async move {
-        let status = process
+        let status = client
+            .process
             .wait()
             .await
             .expect("development server process encountered an error");
+
         info!(
-            "Process exited {:#?}.
-Cannot continue.",
+            "Process exited. Cannot continue. Error:
+
+{:#?}",
             status
         );
     });
 
-    tokio::select! {
+    warn!("Started development server");
+    debug!("HTTP development server listening on {}", http_addr);
+    debug!("RPC server listening on {}", rpc_addr);
+
+    if *open_browser {
+        let _ = poll_server_listening().await;
+        match open::that(&http_addr) {
+            Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
+            Err(err) => error!("An error occurred when opening '{}': {}", http_addr, err),
+        }
+    } else {
+        debug!("You can reach the development server on {}", http_addr);
+    }
+
+    return tokio::select! {
         // Wait for the handlers to exit. Currently this will never happen
-        wait = wait =>  error!("wait {:?}", wait),
+        wait = wait => info!("wait {:?}", wait),
         task_handle = task_handle => {
             match task_handle {
                 Ok(_) => std::process::exit(-1),
                 Err(e) => error!("task_handle error {:?}", e)
             }
         }
-    }
+    };
 }
 
 fn start_server(
@@ -272,9 +288,9 @@ async fn setup_listeners(
         let mut reader = stdout_reader.lines();
         loop {
             match reader.next_line().await {
-                Ok(Some(string)) => info!("handle_recv: {}", string),
-                Ok(None) => info!("handle_recv: None"),
-                Err(e) => error!("handle_recv: {:?}", e),
+                Ok(Some(string)) => trace!("handle_recv: {}", string),
+                Ok(None) => trace!("handle_recv: None"),
+                Err(e) => trace!("handle_recv: {:?}", e),
             }
         }
     });
@@ -283,17 +299,17 @@ async fn setup_listeners(
         let mut reader = stderr_reader.lines();
         loop {
             match reader.next_line().await {
-                Ok(Some(string)) => info!("handle_send: {}", string),
-                Ok(None) => info!("handle_send: None"),
-                Err(e) => error!("handle_send: {:?}", e),
+                Ok(Some(string)) => trace!("handle_send: {}", string),
+                Ok(None) => trace!("handle_send: None"),
+                Err(e) => trace!("handle_send: {:?}", e),
             }
         }
     });
     // Wait for a handler to exit. You already spawned the handlers, you don't need to spawn them again.
     // I'm using select instead of join so we can see any errors immediately.
     tokio::select! {
-        recv = handle_stdout => info!("recv: {:?}", recv),
-        send = handle_stderr => info!("send: {:?}", send),
+        recv = handle_stdout => trace!("recv: {:?}", recv),
+        send = handle_stderr => trace!("send: {:?}", send),
     };
 }
 
@@ -303,25 +319,14 @@ async fn start(
     rpc_port: &u16,
     open_browser: &bool,
 ) -> Result<(), DynError> {
-    let http_addr = format!("http://{}:{}", domain, http_port);
+    warn!("Starting development server");
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
 
-    // TODO: handle Error from server_listening
-    if let Ok(_) = server_listening(rpc_addr.clone()).await {
-        trigger(http_port, rpc_port).await;
-
-        debug!("HTTP development server listening on {}", http_addr);
-        debug!("RPC server listening on {}", rpc_addr);
-    }
-
-    if *open_browser {
-        poll_server_listening().await?;
-        match open::that(&http_addr) {
-            Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
-            Err(err) => error!("An error occurred when opening '{}': {}", http_addr, err),
+    match server_listening(rpc_addr.clone()).await {
+        Ok(_) => spawn_client(domain, http_port, rpc_port, open_browser).await,
+        Err(e) => {
+            warn!("Listening Error: {:?}", e);
         }
-    } else {
-        debug!("You can reach the development server on {}", http_addr);
     }
 
     Ok(())
@@ -338,7 +343,7 @@ async fn stop(domain: &str, rpc_port: &u16) -> Result<(), Box<dyn std::error::Er
 }
 
 async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
-    debug!("Stopping development server");
+    warn!("Stopping development server");
     let address = format!("http://{}:{}", domain, rpc_port);
     let client = DevelopmentClient::connect(address.clone()).await;
     match client {
@@ -349,14 +354,14 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
 
             match response.into_inner() {
                 Success {} => {
-                    debug!("Successfully stopped development server");
+                    warn!("Stopped development server");
                 }
             }
         }
         Err(err) => {
             return match err.to_string().as_str() {
                 "transport error" => {
-                    debug!("Server not yet started");
+                    warn!("Server not yet started");
                     return Ok(());
                 }
                 err => *Box::new(Err(err.into())),
