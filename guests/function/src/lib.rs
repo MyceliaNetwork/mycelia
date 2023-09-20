@@ -1,7 +1,6 @@
 // src/lib.rs
 
 use exports::exports::{GuestFooBar, OwnFooBar};
-use mycelia::execution::types;
 
 // Use a procedural macro to generate bindings for the world we specified in
 // `host.wit`
@@ -20,6 +19,7 @@ wit_bindgen::generate!({
         "exports": MyTestHandler,
     },
 });
+
 // Todo produce exports..
 
 // Todo check how the macro is being expanded
@@ -46,6 +46,7 @@ impl exports::exports::Guest for MyTestHandler {
 
 impl Guest for TestFunction {
     fn handle_request(req: HttpRequest) -> HttpResponse {
+        let _client = mycelia_http::guest::http::new_http_client();
         let body = if req.body.len() > 0 {
             req.body
         } else {

@@ -1,4 +1,5 @@
 // TODO move into own package
+#[cfg(not(target_arch = "wasm32"))]
 pub mod mycelia_core {
     use thiserror::Error;
     use tower::util::BoxService;
@@ -28,6 +29,7 @@ pub enum ClientServiceError {
     BadRequest,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod host {
     use std::collections::HashMap;
 
@@ -117,6 +119,8 @@ pub mod host {
     }
 
     impl bindgen::mycelia_alpha::http::types::Host for HostClientResource {}
+
+    #[async_trait]
     impl bindgen::mycelia_alpha::http::interfaces::Host for HostClientResource {}
 
     pub trait HostClientResourceMaker {
@@ -138,19 +142,20 @@ pub mod host {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod providers {
 
     pub mod hyper {
-        use std::{future::Future, io::Bytes, pin::Pin};
+        use std::{future::Future, pin::Pin};
 
         use anyhow::anyhow;
-        use hyper::{body::HttpBody, client::HttpConnector, Body, Method, Request, Response};
-        use tower::{service_fn, util::BoxService, BoxError, Service, ServiceBuilder, ServiceExt};
+        use hyper::{body::HttpBody, Body, Method, Request};
+        use tower::{util::BoxService, Service, ServiceBuilder, ServiceExt};
 
         use crate::{
             host::{
-                ClientRequest, ClientResponse, ClientResult, HostClient, HostClientMaker,
-                HostClientResource, HostClientResourceMaker,
+                ClientRequest, ClientResponse, ClientResult, HostClientMaker, HostClientResource,
+                HostClientResourceMaker,
             },
             mycelia_core::HostResourceIdProvider,
             ClientServiceError,
@@ -176,7 +181,7 @@ pub mod providers {
         }
 
         fn new_client_maker() -> HostClientMaker {
-            let service = ServiceBuilder::new().service_fn(|v: ()| async {
+            let service = ServiceBuilder::new().service_fn(|_v: ()| async {
                 let service = HyperHostClient;
 
                 Ok(service.boxed())
@@ -196,7 +201,7 @@ pub mod providers {
 
             fn poll_ready(
                 &mut self,
-                cx: &mut std::task::Context<'_>,
+                _cx: &mut std::task::Context<'_>,
             ) -> std::task::Poll<Result<(), Self::Error>> {
                 std::task::Poll::Ready(Ok(()))
             }
@@ -207,7 +212,7 @@ pub mod providers {
                 // and implement poll correctly
                 let client = hyper::Client::new();
                 Box::pin(async move {
-                    let mut resp = client.request(req.try_into()?).await?;
+                    let resp = client.request(req.try_into()?).await?;
                     let (parts, mut data) = resp.into_parts();
 
                     let body = read_body_stream(&mut data).await;
@@ -236,13 +241,6 @@ pub mod providers {
                     Ok(r)
                 })
             }
-        }
-
-        async fn make_request(
-            client: &hyper::Client<HttpConnector>,
-            request: ClientRequest,
-        ) -> anyhow::Result<ClientResult> {
-            todo!()
         }
 
         impl TryInto<Request<Body>> for ClientRequest {
@@ -305,6 +303,51 @@ pub mod providers {
                 crate::host::Method::Trace => Ok(Method::TRACE),
                 crate::host::Method::Patch => Ok(Method::PATCH),
                 crate::host::Method::Other(_) => Err(ClientServiceError::BadRequest),
+            }
+        }
+    }
+}
+
+pub mod guest {
+    mod bindgen {
+        wit_bindgen::generate!({
+            // the name of the world in the `*.wit` input file
+            world: "command",
+
+            // For all exported worlds, interfaces, and resources, this specifies what
+            // type they're corresponding to in this module. In this case the `MyHost`
+            // struct defined below is going to define the exports of the `world`,
+            // namely the `run` function.
+            // exports: {
+            //     world: TestFunction,
+            //     "mycelia:execution/function-world": TestFunction,
+            //     "exports/foo-bar": MyTestHandler,
+            //     "exports": MyTestHandler,
+            // },
+        });
+    }
+    pub mod http {
+        use super::bindgen::mycelia_alpha::http::types::*;
+
+        pub type Client = super::bindgen::mycelia_alpha::http::interfaces::Client;
+        pub type HttpRequest = ClientRequest;
+        pub type HttpResponse = ClientResponse;
+        pub type HttpResult = ClientResult;
+
+        // facade for producing a new client
+        pub fn new_http_client() -> HttpClient {
+            HttpClient {
+                inner: Client::new(),
+            }
+        }
+
+        pub struct HttpClient {
+            inner: Client,
+        }
+
+        impl HttpClient {
+            pub fn send(&mut self, request: &HttpRequest) -> HttpResult {
+                self.inner.send(request)
             }
         }
     }

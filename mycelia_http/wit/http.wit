@@ -54,7 +54,4 @@ interface interfaces {
 
 world command {
   import interfaces
-
-  // parameter is passed from guest to host
-  // result is returned to guest from host
 }

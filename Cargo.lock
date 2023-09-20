@@ -1036,6 +1036,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "http",
+ "mycelia_http",
  "tokio",
  "tower",
  "wasmtime",
@@ -1666,6 +1667,7 @@ name = "mycelia_guest_function"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "mycelia_http",
  "wit-bindgen",
  "wit-deps",
 ]
@@ -1676,12 +1678,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "http",
  "hyper",
  "thiserror",
  "tokio",
  "tower",
  "wasmtime",
  "wasmtime-wasi",
+ "wit-bindgen",
 ]
 
 [[package]]

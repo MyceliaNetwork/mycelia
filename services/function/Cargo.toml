@@ -13,3 +13,4 @@ wasmtime-wasi = { workspace = true}
 tower = { version = "0.4.13", features = ["full"] }
 wasmtime_components = {path = "../../wasmtime_components"}
 http = "0.2.9"
+mycelia_http = { version = "0.1.0", path = "../../mycelia_http"}

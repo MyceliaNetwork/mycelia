@@ -51,7 +51,6 @@ interface types {
 
 world function-world {
   use types.{http-request, http-response}
-  import mycelia-alpha:http/http-client
 
   export exports: interface {
     resource foo-bar {

@@ -264,6 +264,11 @@ pub mod service {
 mod test {
     use super::types::*;
 
+    use mycelia_http::host::HostClientResourceMaker;
+    use mycelia_http::mycelia_core::ServiceError;
+    use mycelia_http::providers::hyper::HyperClientResourceMaker;
+    use tower::{service_fn, ServiceBuilder, ServiceExt};
+    use tower::util::BoxService;
     use wasmtime::component::{Component, Linker};
     use wasmtime::{Config, Engine, Store};
     use wasmtime_wasi::preview2::{
@@ -302,6 +307,7 @@ mod test {
     pub(crate) struct ServerWasiView {
         pub(crate) table: Table,
         pub(crate) ctx: WasiCtx,
+        pub(crate) http_client_maker: HyperClientResourceMaker
     }
 
     impl ServerWasiView {
@@ -312,7 +318,20 @@ mod test {
                 .build(&mut table)
                 .unwrap();
 
-            Self { table, ctx }
+                async fn service_fn(v : ()) -> Result<u32, ServiceError> {
+                    Ok(100u32)
+                }
+
+                let service = ServiceBuilder::new().service_fn(service_fn).boxed();
+                let http_client_maker = mycelia_http::providers::hyper::new(service);
+
+            Self { table, ctx, http_client_maker }
+        }
+    }
+
+    impl HostClientResourceMaker for ServerWasiView {
+        fn new(&mut self) -> anyhow::Result<&mut mycelia_http::host::HostClientResource> {
+            self.http_client_maker.new()
         }
     }
 
@@ -328,6 +347,8 @@ mod test {
         let mut store = Store::new(&engine, host_view);
 
         let _ = add_to_linker(&mut linker)?;
+
+        let _ = mycelia_http::host::setup_with_wasmtime(&mut store, &test_function_component, &mut linker).await?;
 
         let (bindings, _instance) =
             FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker).await?;
