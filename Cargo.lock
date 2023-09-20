@@ -1678,6 +1678,7 @@ dependencies = [
  "async-trait",
  "hyper",
  "thiserror",
+ "tokio",
  "tower",
  "wasmtime",
  "wasmtime-wasi",
