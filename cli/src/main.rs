@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
     process::Stdio,
 };
+use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, ChildStdout, Command},
@@ -19,6 +20,20 @@ pub mod development {
 }
 use development::development_client::DevelopmentClient;
 use development::{EchoReply, EchoRequest, Empty, Success};
+
+#[derive(Error, Debug)]
+pub enum ClientError {
+    #[error("host client isn't ready. wait and try again.")]
+    NotReady,
+    #[error("not yet started")]
+    NotStarted,
+    #[error("already started")]
+    AlreadyStarted,
+    #[error("client error")]
+    ClientError { cause: String },
+    #[error("unknown failure")]
+    Unknown,
+}
 
 type DynError = Box<dyn Error>;
 
@@ -139,7 +154,7 @@ Status code: {}",
     Ok(())
 }
 
-async fn server_listening(address: String) -> Result<(), DynError> {
+async fn server_listening(address: String) -> Result<(), ClientError> {
     let payload = "poll_dev_server";
 
     match DevelopmentClient::connect(address).await {
@@ -148,27 +163,25 @@ async fn server_listening(address: String) -> Result<(), DynError> {
                 message: payload.to_string(),
             };
             let request = tonic::Request::new(message);
-            let response = client.echo(request).await?;
+            let response = client.echo(request).await;
 
-            match response.into_inner() {
+            match response.unwrap().into_inner() {
                 EchoReply { message } => {
                     if message == payload.to_string() {
                         warn!("Development server already listening");
-                        return Ok(());
+                        return Err(ClientError::AlreadyStarted);
                     } else {
                         error!("Error echoing message to RPC server");
-                        return *Box::new(Err("Error echoing message to RPC server".into()));
+                        return Err(ClientError::NotReady);
                     }
                 }
             };
         }
         Err(err) => match err.to_string().as_str() {
-            "transport error" => {
-                return *Box::new(Err("Server not yet started".into()));
-            }
-            err => *Box::new(Err(err.into())),
+            "transport error" => return Ok(()),
+            err => return Err(ClientError::ClientError { cause: err.into() }),
         },
-    }
+    };
 }
 
 async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
@@ -177,19 +190,29 @@ async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynEr
     loop {
         let rpc_addr = format!("http://{}:{}", domain, rpc_port);
         match server_listening(rpc_addr).await {
-            Err("Server already listening") => return Ok(()),
-            Err("Server not yet started") => return Ok(()),
-            Err("Error echoing message to RPC server") => {
-                Err("Error echoing message to RPC server")
+            Err(ClientError::NotReady) => {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+
+                if start.elapsed() > timeout {
+                    return Err("Timeout waiting for server to start")?;
+                }
             }
-            e => todo!("{:?}", e),
+            Err(ClientError::AlreadyStarted) => return Ok(()),
+            Err(ClientError::NotStarted) => return Ok(()),
+            Err(ClientError::ClientError { cause }) => {
+                return Err(cause)?;
+            }
+            Err(ClientError::Unknown) => return Err("Unknown error")?,
+            Ok(_) => return Ok(())
+            // Err("Server already listening") => return Ok(()),
+            // Err("Server not yet started") => return Ok(()),
+            // Err("Error echoing message to RPC server") => {
+            //     Err("Error echoing message to RPC server")
+            // }
+            // e => todo!("{:?}", e),
         };
 
         tokio::time::sleep(Duration::from_secs(1)).await;
-
-        if start.elapsed() > timeout {
-            return Err("Timeout waiting for server to start")?;
-        }
     }
 }
 
