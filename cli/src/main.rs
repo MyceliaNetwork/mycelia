@@ -433,16 +433,18 @@ async fn try_deploy(
             };
             let request = tonic::Request::new(message);
             let response = client.deploy_component(request).await?;
-            println!(
-                "🪵 [main.rs:432]~ token ~ \x1b[0;32mresponse\x1b[0m = {:?}",
-                response
-            );
 
             match response.into_inner() {
-                DeployReply { message } => warn!("Hoax deploy. Message: {:?}", message),
-            }
-
-            Ok(())
+                DeployReply { message } => {
+                    if message == "Ok".to_string() {
+                        warn!("Deployed component to path: {}", componen_path.to_string());
+                        return Ok(());
+                    } else {
+                        error!("Error deploying component. Error: {:?}", message);
+                        return Err("Error deploying component. Error".into());
+                    }
+                }
+            };
         }
         Err(e) => {
             println!("🪵 [main.rs:447]~ token ~ \x1b[0;32me\x1b[0m = {:?}", e);
