@@ -187,6 +187,8 @@ async fn server_listening(address: String) -> Result<(), ClientError> {
 async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     let start = Instant::now();
     let timeout = Duration::from_secs(5);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
     loop {
         let rpc_addr = format!("http://{}:{}", domain, rpc_port);
         match server_listening(rpc_addr).await {
@@ -203,16 +205,8 @@ async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynEr
                 return Err(cause)?;
             }
             Err(ClientError::Unknown) => return Err("Unknown error")?,
-            Ok(_) => return Ok(())
-            // Err("Server already listening") => return Ok(()),
-            // Err("Server not yet started") => return Ok(()),
-            // Err("Error echoing message to RPC server") => {
-            //     Err("Error echoing message to RPC server")
-            // }
-            // e => todo!("{:?}", e),
+            Ok(_) => return Ok(()),
         };
-
-        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
 
