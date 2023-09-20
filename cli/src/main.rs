@@ -141,8 +141,8 @@ Status code: {}",
 
 async fn server_listening(address: String) -> Result<(), DynError> {
     let payload = "poll_dev_server";
-    let client = DevelopmentClient::connect(address.clone()).await;
-    match client {
+
+    match DevelopmentClient::connect(address).await {
         Ok(mut client) => {
             let message = EchoRequest {
                 message: payload.to_string(),
@@ -154,18 +154,17 @@ async fn server_listening(address: String) -> Result<(), DynError> {
                 EchoReply { message } => {
                     if message == payload.to_string() {
                         warn!("Development server already listening");
-                        return Err("Development server already listening".into());
+                        return Ok(());
                     } else {
                         error!("Error echoing message to RPC server");
-                        return Ok(());
+                        return *Box::new(Err("Error echoing message to RPC server".into()));
                     }
                 }
             };
         }
         Err(err) => match err.to_string().as_str() {
             "transport error" => {
-                debug!("Server not yet started");
-                return Ok(());
+                return *Box::new(Err("Server not yet started".into()));
             }
             err => *Box::new(Err(err.into())),
         },
@@ -175,18 +174,21 @@ async fn server_listening(address: String) -> Result<(), DynError> {
 async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     let start = Instant::now();
     let timeout = Duration::from_secs(5);
-
     loop {
         let rpc_addr = format!("http://{}:{}", domain, rpc_port);
-        if let Err(_) = server_listening(rpc_addr).await {
-            warn!("Development server listening");
-            return Ok(());
-        }
+        match server_listening(rpc_addr).await {
+            Err("Server already listening") => return Ok(()),
+            Err("Server not yet started") => return Ok(()),
+            Err("Error echoing message to RPC server") => {
+                Err("Error echoing message to RPC server")
+            }
+            e => todo!("{:?}", e),
+        };
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         if start.elapsed() > timeout {
-            Err("Timeout waiting for server to start")?;
+            return Err("Timeout waiting for server to start")?;
         }
     }
 }
@@ -223,9 +225,9 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
             Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
             Err(err) => error!("An error occurred when opening '{}': {}", http_addr, err),
         }
-    } else {
-        info!("You can reach the development server on {}", http_addr);
     }
+
+    info!("You can reach the development server on {}", http_addr);
 
     return tokio::select! {
         // Wait for the handlers to exit. Currently this will never happen
