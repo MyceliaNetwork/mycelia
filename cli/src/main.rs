@@ -19,7 +19,7 @@ pub mod development {
     tonic::include_proto!("development");
 }
 use development::development_client::DevelopmentClient;
-use development::{EchoReply, EchoRequest, Empty, Success};
+use development::{DeployReply, DeployRequest, EchoReply, EchoRequest, Empty};
 
 #[derive(Error, Debug)]
 pub enum ClientError {
@@ -89,7 +89,21 @@ enum Commands {
         rpc_port: u16,
     },
     /// Deploy your Mycelia project
-    Deploy,
+    Deploy {
+        /// The domain to listen on.
+        /// Default: localhost
+        #[clap(short, long, default_value = "127.0.0.1")]
+        domain: String,
+
+        /// The port rpc server should bind to
+        /// Default: 50051
+        #[clap(long, default_value = "50051")]
+        rpc_port: u16,
+
+        /// The path the component is being deployed to.
+        #[clap(long)]
+        component_path: String,
+    },
 }
 
 #[tokio::main]
@@ -127,8 +141,12 @@ async fn try_main() -> Result<(), DynError> {
         Commands::Stop { domain, rpc_port } => {
             let _ = stop(domain, rpc_port).await;
         }
-        Commands::Deploy => {
-            let _ = deploy().await;
+        Commands::Deploy {
+            domain,
+            rpc_port,
+            component_path,
+        } => {
+            let _ = deploy(domain, rpc_port, component_path).await;
         }
     }
 
@@ -187,6 +205,7 @@ async fn server_listening(address: String) -> Result<(), ClientError> {
 async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     let start = Instant::now();
     let timeout = Duration::from_secs(5);
+
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     loop {
@@ -352,7 +371,7 @@ async fn start(
     Ok(())
 }
 
-async fn stop(domain: &str, rpc_port: &u16) -> Result<(), Box<dyn std::error::Error>> {
+async fn stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     if let Err(e) = try_stop(domain, rpc_port).await {
         error!("{}", e);
 
@@ -368,12 +387,11 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     let client = DevelopmentClient::connect(address.clone()).await;
     match client {
         Ok(mut client) => {
-            // let mut client = DevelopmentClient::connect(address.clone()).await?;
             let request = tonic::Request::new(Empty {});
             let response = client.stop_server(request).await?;
 
             match response.into_inner() {
-                Success {} => warn!("Stopped development server"),
+                Empty {} => warn!("Stopped development server"),
             }
         }
         Err(err) => {
@@ -390,8 +408,47 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     Ok(())
 }
 
-async fn deploy() -> Result<(), DynError> {
-    todo!("deploy")
+async fn deploy(domain: &String, rpc_port: &u16, componen_path: &String) -> Result<(), DynError> {
+    if let Err(e) = try_deploy(domain, rpc_port, componen_path).await {
+        error!("{}", e);
+
+        std::process::exit(-1);
+    }
+
+    Ok(())
+}
+
+async fn try_deploy(
+    domain: &String,
+    rpc_port: &u16,
+    componen_path: &String,
+) -> Result<(), DynError> {
+    let address = format!("http://{}:{}", domain, rpc_port);
+    let client = DevelopmentClient::connect(address).await;
+
+    match client {
+        Ok(mut client) => {
+            let message = DeployRequest {
+                component_path: componen_path.to_string(),
+            };
+            let request = tonic::Request::new(message);
+            let response = client.deploy_component(request).await?;
+            println!(
+                "🪵 [main.rs:432]~ token ~ \x1b[0;32mresponse\x1b[0m = {:?}",
+                response
+            );
+
+            match response.into_inner() {
+                DeployReply { message } => warn!("Hoax deploy. Message: {:?}", message),
+            }
+
+            Ok(())
+        }
+        Err(e) => {
+            println!("🪵 [main.rs:447]~ token ~ \x1b[0;32me\x1b[0m = {:?}", e);
+            todo!("handle error")
+        }
+    }
 }
 
 fn project_root() -> PathBuf {
