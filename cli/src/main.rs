@@ -76,6 +76,12 @@ enum Commands {
         /// Possible values: true, false
         #[clap(short, long, default_value = "true")]
         open_browser: bool,
+
+        /// Run the development server in the background.
+        /// Default: false
+        /// Possible values: true, false
+        #[clap(short, long, default_value = "false")]
+        background: bool,
     },
     /// Stop the Mycelia development server
     Stop {
@@ -91,6 +97,10 @@ enum Commands {
     },
     /// Deploy your Mycelia project
     Deploy {
+        /// The component inside `./components/` which is being deployed.
+        #[clap(long)]
+        component: String,
+
         /// The domain to listen on.
         /// Default: localhost
         #[clap(short, long, default_value = "127.0.0.1")]
@@ -105,10 +115,6 @@ enum Commands {
         /// Default: 50051
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
-
-        /// The path the component is being deployed to.
-        #[clap(long)]
-        component_path: String,
     },
 }
 
@@ -141,8 +147,9 @@ async fn try_main() -> Result<(), DynError> {
             http_port,
             rpc_port,
             open_browser,
+            background,
         } => {
-            let _ = start(domain, http_port, rpc_port, open_browser).await;
+            let _ = start(domain, http_port, rpc_port, open_browser, background).await;
         }
         Commands::Stop { domain, rpc_port } => {
             let _ = stop(domain, rpc_port).await;
@@ -151,9 +158,9 @@ async fn try_main() -> Result<(), DynError> {
             domain,
             http_port,
             rpc_port,
-            component_path,
+            component,
         } => {
-            let _ = deploy(domain, http_port, rpc_port, component_path).await;
+            let _ = deploy(domain, http_port, rpc_port, component).await;
         }
     }
 
@@ -236,7 +243,13 @@ async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynEr
     }
 }
 
-async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
+async fn spawn_client(
+    domain: &str,
+    http_port: &u16,
+    rpc_port: &u16,
+    open_browser: &bool,
+    background: &bool,
+) {
     let http_addr = format!("http://{}:{}", domain, http_port);
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
     let (mut client, wait) = start_development_server(http_port, rpc_port);
@@ -272,6 +285,9 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
 
     info!("You can reach the development server on {}", http_addr);
 
+    if *background {
+        return;
+    }
     return tokio::select! {
         // Wait for the handlers to exit. Currently this will never happen
         wait = wait => trace!("wait {:?}", wait),
@@ -364,12 +380,13 @@ async fn start(
     http_port: &u16,
     rpc_port: &u16,
     open_browser: &bool,
+    background: &bool,
 ) -> Result<(), DynError> {
     info!("Starting development server");
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
 
     match server_listening(rpc_addr).await {
-        Ok(_) => spawn_client(domain, http_port, rpc_port, open_browser).await,
+        Ok(_) => spawn_client(domain, http_port, rpc_port, open_browser, background).await,
         Err(e) => {
             error!("Listening Error: {:?}", e);
         }
@@ -415,13 +432,18 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     Ok(())
 }
 
+/*
+ * Usage:
+ *
+ * cargo run deploy --component-path="./components/meh.wasm"
+ */
 async fn deploy(
     domain: &String,
     http_port: &u16,
     rpc_port: &u16,
-    componen_path: &String,
+    component: &String,
 ) -> Result<(), DynError> {
-    if let Err(e) = try_deploy(domain, http_port, rpc_port, componen_path).await {
+    if let Err(e) = try_deploy(domain, http_port, rpc_port, component).await {
         error!("{}", e);
 
         std::process::exit(-1);
@@ -434,17 +456,18 @@ async fn try_deploy(
     domain: &String,
     http_port: &u16,
     rpc_port: &u16,
-    componen_path: &String,
+    component: &String,
 ) -> Result<(), DynError> {
     let open_browser = false;
-    start(domain, http_port, rpc_port, &open_browser).await?;
+    start(domain, http_port, rpc_port, &open_browser, &true).await?;
     let address = format!("http://{}:{}", domain, rpc_port);
     let client = DevelopmentClient::connect(address).await;
+    let component_path = format!("./components/{}.wasm", component);
 
     match client {
         Ok(mut client) => {
             let message = DeployRequest {
-                component_path: componen_path.to_string(),
+                component_path: component_path.clone(),
             };
             let request = tonic::Request::new(message);
             let response = client.deploy_component(request).await?;
@@ -452,7 +475,7 @@ async fn try_deploy(
             match response.into_inner() {
                 DeployReply { message } => {
                     if message == "Ok".to_string() {
-                        warn!("Deployed component to path: {}", componen_path.to_string());
+                        info!("Deployed component to path: {}", component_path);
                         return Ok(());
                     } else {
                         error!("Error deploying component. Error: {:?}", message);
@@ -462,8 +485,8 @@ async fn try_deploy(
             };
         }
         Err(e) => {
-            println!("🪵 [main.rs:447]~ token ~ \x1b[0;32me\x1b[0m = {:?}", e);
-            todo!("handle error")
+            error!("Deployment Error: {:?}", e);
+            return Err("Deployment Error".into());
         }
     }
 }
