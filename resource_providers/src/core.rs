@@ -1,4 +1,4 @@
-//! Core components primarily designed for building host wasm resource implmentations.
+//! Core components primarily designed for building host wasm resource implementations.
 //! The host-side code in this module is intended for use by the mycelia runtime but
 //! can also be utilized in any wasmtime rust project.
 //! This module provides functionalities to allow wasm guests to make HTTP requests.
@@ -20,5 +20,6 @@ pub enum IdProductionError {
     Unknown,
 }
 
-/// A service that provides unique resource identifiers for wasm component resource providers.
+/// A service that generates unique resource identifiers for wasm component resource providers.
+/// TODO we need to provide a concrete implementation
 pub type HostResourceIdProvider = BoxService<(), u32, IdProductionError>;

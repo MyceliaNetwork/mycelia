@@ -1,4 +1,4 @@
-//! Provides a hyper-backed implementation of the host http client.
+//! Provides a [hyper](https://crates.io/crates/hyper)-backed implementation of a host http client.
 //! This module offers a concrete implementation of an http client for the host side
 //! of wasm interactions. The client produced here is offered to wasm guests by
 //! the mycelia runtime to allow them to make http requests.
@@ -20,6 +20,8 @@ pub struct HyperClientResourceMaker {
     inner: HostClientResource,
 }
 
+/// `HostClientResourceMaker` by our core wasm resource provider framework (pattern?)
+/// to provide the actual clients when requested by wasm
 impl HostClientResourceMaker for HyperClientResourceMaker {
     fn new(&mut self) -> anyhow::Result<&mut HostClientResource> {
         let inner = &mut self.inner;
