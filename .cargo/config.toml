@@ -1,5 +1,2 @@
 [alias]
 xtask = "run --manifest-path ./xtask/Cargo.toml --"
-
-[workspace.mycelia_guest_function]
-target = "wasm32-wasi"

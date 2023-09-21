@@ -52,6 +52,8 @@ use thiserror::Error;
 pub enum ClientMakeError {
     #[error("wasm guest resource not found.")]
     NotFound,
+    #[error("attempted to associate a resource to an existing id")]
+    BadResourceId,
 }
 
 #[derive(Error, Debug)]
@@ -66,6 +68,11 @@ pub enum HttpClientError {
     ClientError { cause: String },
     #[error("guest produced a malformed request")]
     BadRequest,
+    /// This should never happen. If we cannot find a client the guest is
+    /// either somehow intentionally requesting access to resources it should not access
+    /// Or, more likely we have a bug tracking the lifetime of http client resources
+    #[error("guest tried to use a client which does not exist")]
+    HostResourceNotFound,
 }
 
 /// Abstract service type defining an HttpClient
@@ -99,7 +106,14 @@ impl HostClientResource {
 
 #[async_trait]
 impl HostClientInterface for HostClientResource {
-    /// Creates a new guest HttpClient Resource storing its resource id
+    /// Creates a new HttpClient Resource and returns the resource to the guest.
+    ///
+    /// We return a resource id the guest will use to request access to the resource
+    /// internally, we create a mapping of <ID, Client> so we can lookup the correct
+    /// client to make the request.
+    ///
+    /// Note, in the future this will allow us to have precise control over
+    /// the behavior of the host client. Rate limiting, logging, etc, request tagging, etc :D
     async fn new(&mut self) -> anyhow::Result<Resource<Client>> {
         let rdy_client = self.resource_id_provider.ready().await?;
         let new_id = rdy_client.call(()).await?;
@@ -108,7 +122,8 @@ impl HostClientInterface for HostClientResource {
         let new_client = rdy_client.call(()).await?;
 
         if let Some(_) = self.clients.insert(new_id, new_client) {
-            // print error. This is indicative of a bug in the upstream id provider client
+                      // print error. This is indicative of a bug in the upstream id provider client
+            return Err(ClientMakeError::BadResourceId);
         }
 
         Ok(Resource::new_own(new_id))
@@ -121,7 +136,7 @@ impl HostClientInterface for HostClientResource {
         req: ClientRequest,
     ) -> anyhow::Result<ClientResult> {
         let id = guest_self.rep();
-        let client = self.clients.get_mut(&id).ok_or(ClientMakeError::NotFound)?;
+        let client = self.clients.get_mut(&id).ok_or(HttpClientError::HostResourceNotFound)?;
         let client = client.ready().await?;
         Ok(client.call(req).await?)
     }

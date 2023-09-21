@@ -2,6 +2,10 @@
 //! This module offers a concrete implementation of an http client for the host side
 //! of wasm interactions. The client produced here is offered to wasm guests by
 //! the mycelia runtime to allow them to make http requests.
+//! TODO
+//! * we MUST provide an example usage here
+//! * developers should interact with the wasm client using the [wonderful http crate](https://crates.io/crates/http)
+//!     so they're not using some weird types in their code
 
 use std::{future::Future, pin::Pin};
 

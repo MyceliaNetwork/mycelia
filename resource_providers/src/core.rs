@@ -13,6 +13,11 @@ use tower::util::BoxService;
 
 #[derive(Error, Debug)]
 /// Errors associated with ID production.
+///
+/// The produced IDs represent access to actual limited resources host side.
+///
+/// We want these to surface when resources begin to become constrained
+/// and presented to guests so they may take appropriate action
 pub enum IdProductionError {
     #[error("wait and try again")]
     NotReady,
