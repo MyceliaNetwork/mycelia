@@ -134,6 +134,11 @@ impl From<hyper::Error> for HttpClientError {
 // prevent a malicious tenant from consuming too much resources
 static RESPONSE_LIMIT: usize = 5 * 1024 * 1024;
 
+/// TODO
+/// we should create a read / write stream resources to use until wasi streams are ready.
+/// This works for now. But, guests might benefit from having streaming access to the body.
+///
+/// This work can be done whenever we start on adding websocket support
 async fn read_body_stream(body: &mut hyper::Body) -> anyhow::Result<Vec<u8>> {
     let mut out: Vec<u8> = vec![];
     let mut size = 0;
