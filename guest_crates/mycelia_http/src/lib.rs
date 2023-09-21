@@ -1,7 +1,6 @@
 //! A convenient rust crate providing a wasm http client
 //! see `resource_providers::http` for the host side code
 
-
 // TODO: More comprehensive documentation on the guest-side API
 // for the wit-bindgen generated guest code.
 // TODO: Move into new crate

@@ -10,9 +10,9 @@ use hyper::{body::HttpBody, Body, Method, Request};
 use tower::{util::BoxService, Service, ServiceBuilder, ServiceExt};
 
 use crate::http::{
-        ClientRequest, ClientResponse, ClientResult, HostClientMaker, HostClientResource,
-        HostClientResourceMaker, HttpClientError
-    };
+    ClientRequest, ClientResponse, ClientResult, HostClientMaker, HostClientResource,
+    HostClientResourceMaker, HttpClientError,
+};
 
 use crate::core::HostResourceIdProvider;
 
@@ -152,12 +152,12 @@ async fn read_body_stream(body: &mut hyper::Body) -> anyhow::Result<Vec<u8>> {
 fn get_method(req: &ClientRequest) -> Result<Method, HttpClientError> {
     use crate::http::Method as WasmHttpMethod;
     match &req.method {
-      WasmHttpMethod::Get => Ok(Method::GET),
-      WasmHttpMethod::Head => Ok(Method::HEAD),
-      WasmHttpMethod::Post => Ok(Method::POST),
-      WasmHttpMethod::Put => Ok(Method::PUT),
-      WasmHttpMethod::Delete => Ok(Method::DELETE),
-      WasmHttpMethod::Connect => Ok(Method::CONNECT),
+        WasmHttpMethod::Get => Ok(Method::GET),
+        WasmHttpMethod::Head => Ok(Method::HEAD),
+        WasmHttpMethod::Post => Ok(Method::POST),
+        WasmHttpMethod::Put => Ok(Method::PUT),
+        WasmHttpMethod::Delete => Ok(Method::DELETE),
+        WasmHttpMethod::Connect => Ok(Method::CONNECT),
         WasmHttpMethod::Options => Ok(Method::OPTIONS),
         WasmHttpMethod::Trace => Ok(Method::TRACE),
         WasmHttpMethod::Patch => Ok(Method::PATCH),

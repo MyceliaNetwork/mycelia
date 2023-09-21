@@ -1,3 +1,3 @@
 pub mod core;
-pub mod providers;
 pub mod http;
+pub mod providers;

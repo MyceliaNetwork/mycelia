@@ -79,7 +79,10 @@ pub struct HostClientResource {
 }
 
 impl HostClientResource {
-    pub fn new(client_maker: HostClientMaker, resource_id_provider: HostResourceIdProvider) -> Self {
+    pub fn new(
+        client_maker: HostClientMaker,
+        resource_id_provider: HostResourceIdProvider,
+    ) -> Self {
         Self {
             resource_id_provider,
             client_maker,
@@ -90,7 +93,6 @@ impl HostClientResource {
 
 #[async_trait]
 impl HostClientInterface for HostClientResource {
-
     //! Creates a new guest HttpClient Resource storing its resource id
     async fn new(&mut self) -> anyhow::Result<Resource<Client>> {
         let rdy_client = self.resource_id_provider.ready().await?;
