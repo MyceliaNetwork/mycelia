@@ -108,7 +108,7 @@ impl HostClientResource {
 impl HostClientInterface for HostClientResource {
     /// Creates a new HttpClient Resource and returns the resource to the guest.
     ///
-    /// We return a resource id the guest will use to request access to the resource
+    /// We return a resource id which the guest will use to request access to the resource
     /// internally, we create a mapping of <ID, Client> so we can lookup the correct
     /// client to make the request.
     ///
