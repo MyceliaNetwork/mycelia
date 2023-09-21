@@ -387,9 +387,7 @@ async fn start(
 
     match server_listening(rpc_addr).await {
         Ok(_) => spawn_client(domain, http_port, rpc_port, open_browser, background).await,
-        Err(e) => {
-            error!("Listening Error: {:?}", e);
-        }
+        Err(e) => error!("Listening Error: {:?}", e),
     }
 
     Ok(())
@@ -462,12 +460,12 @@ async fn try_deploy(
     start(domain, http_port, rpc_port, &open_browser, &true).await?;
     let address = format!("http://{}:{}", domain, rpc_port);
     let client = DevelopmentClient::connect(address).await;
-    let component_path = format!("./components/{}.wasm", component);
+    let path = format!("./components/{}.wasm", component);
 
     match client {
         Ok(mut client) => {
             let message = DeployRequest {
-                component_path: component_path.clone(),
+                component_path: path.clone(),
             };
             let request = tonic::Request::new(message);
             let response = client.deploy_component(request).await?;
@@ -475,7 +473,7 @@ async fn try_deploy(
             match response.into_inner() {
                 DeployReply { message } => {
                     if message == "Ok".to_string() {
-                        info!("Deployed component to path: {}", component_path);
+                        info!("Deployed component to path: {}", path);
                         return Ok(());
                     } else {
                         error!("Error deploying component. Error: {:?}", message);
