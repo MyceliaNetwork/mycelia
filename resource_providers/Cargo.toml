@@ -1,0 +1,18 @@
+[package]
+name = "resource_providers"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+wit-bindgen = { workspace = true }
+http = { workspace = true }
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+tower = { version = "0.4.13", features = ["util"] }
+hyper = { version = "0.14.27", features = ["full"]}
+tokio = { workspace = true, features = ["full"]}

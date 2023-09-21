@@ -7,7 +7,9 @@ members = [
   "development_server",
   "wasmtime_components",
 
-  "mycelia_http",
+  "resource_providers",
+
+  "guest_crates/mycelia_http",
 
   # Services
   "services/function",

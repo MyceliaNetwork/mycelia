@@ -263,12 +263,10 @@ pub mod service {
 #[cfg(test)]
 mod test {
     use super::types::*;
-
-    use mycelia_http::host::HostClientResourceMaker;
-    use mycelia_http::mycelia_core::ServiceError;
-    use mycelia_http::providers::hyper::HyperClientResourceMaker;
-    use tower::{service_fn, ServiceBuilder, ServiceExt};
+    use resource_providers::core::{IdProductionError, HostResourceIdProvider};
+    use resource_providers::providers::http_client_hyper::HyperClientResourceMaker;
     use tower::util::BoxService;
+    use tower::{service_fn, ServiceBuilder, ServiceExt};
     use wasmtime::component::{Component, Linker};
     use wasmtime::{Config, Engine, Store};
     use wasmtime_wasi::preview2::{
@@ -307,7 +305,7 @@ mod test {
     pub(crate) struct ServerWasiView {
         pub(crate) table: Table,
         pub(crate) ctx: WasiCtx,
-        pub(crate) http_client_maker: HyperClientResourceMaker
+        pub(crate) http_client_maker: HyperClientResourceMaker,
     }
 
     impl ServerWasiView {
@@ -318,14 +316,18 @@ mod test {
                 .build(&mut table)
                 .unwrap();
 
-                async fn service_fn(v : ()) -> Result<u32, ServiceError> {
-                    Ok(100u32)
-                }
+            async fn service_fn(v: ()) -> Result<u32, IdProductionError> {
+                Ok(100u32)
+            }
 
-                let service = ServiceBuilder::new().service_fn(service_fn).boxed();
-                let http_client_maker = mycelia_http::providers::hyper::new(service);
+            let service = ServiceBuilder::new().service_fn(service_fn).boxed();
+            let http_client_maker = mycelia_http::providers::hyper::new(service);
 
-            Self { table, ctx, http_client_maker }
+            Self {
+                table,
+                ctx,
+                http_client_maker,
+            }
         }
     }
 
@@ -348,7 +350,12 @@ mod test {
 
         let _ = add_to_linker(&mut linker)?;
 
-        let _ = mycelia_http::host::setup_with_wasmtime(&mut store, &test_function_component, &mut linker).await?;
+        let _ = mycelia_http::host::setup_with_wasmtime(
+            &mut store,
+            &test_function_component,
+            &mut linker,
+        )
+        .await?;
 
         let (bindings, _instance) =
             FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker).await?;

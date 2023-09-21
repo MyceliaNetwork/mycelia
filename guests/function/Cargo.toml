@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 wit-bindgen = { workspace = true }
-mycelia_http = { version = "0.1.0", path = "../../mycelia_http" }
+mycelia_http = { version = "0.1.0", path = "../../guest_crates/mycelia_http" }
 
 [build-dependencies]
 wit-deps = "0.3.1"

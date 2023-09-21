@@ -1036,7 +1036,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "http",
- "mycelia_http",
+ "resource_providers",
  "tokio",
  "tower",
  "wasmtime",
@@ -2106,6 +2106,22 @@ dependencies = [
  "web-sys",
  "webpki-roots",
  "winreg",
+]
+
+[[package]]
+name = "resource_providers"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http",
+ "hyper",
+ "thiserror",
+ "tokio",
+ "tower",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wit-bindgen",
 ]
 
 [[package]]
