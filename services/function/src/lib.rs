@@ -262,6 +262,7 @@ pub mod service {
 
 #[cfg(test)]
 mod test {
+    // TODO need to inject the mycelia http client provider codes here
     use super::types::*;
     use resource_providers::core::{IdProductionError, HostResourceIdProvider};
     use resource_providers::providers::http_client_hyper::HyperClientResourceMaker;
@@ -272,6 +273,8 @@ mod test {
     use wasmtime_wasi::preview2::{
         command::add_to_linker, Table, WasiCtx, WasiCtxBuilder, WasiView,
     };
+    use resource_providers::http::HostClientResourceMaker;
+
 
     impl WasiView for ServerWasiView {
         fn table(&self) -> &Table {
@@ -321,7 +324,7 @@ mod test {
             }
 
             let service = ServiceBuilder::new().service_fn(service_fn).boxed();
-            let http_client_maker = mycelia_http::providers::hyper::new(service);
+            let http_client_maker = resource_providers::providers::http_client_hyper::new(service);
 
             Self {
                 table,
@@ -332,7 +335,7 @@ mod test {
     }
 
     impl HostClientResourceMaker for ServerWasiView {
-        fn new(&mut self) -> anyhow::Result<&mut mycelia_http::host::HostClientResource> {
+        fn new(&mut self) -> anyhow::Result<&mut resource_providers::http::HostClientResource> {
             self.http_client_maker.new()
         }
     }
@@ -350,7 +353,7 @@ mod test {
 
         let _ = add_to_linker(&mut linker)?;
 
-        let _ = mycelia_http::host::setup_with_wasmtime(
+        let _ = resource_providers::http::setup_with_wasmtime(
             &mut store,
             &test_function_component,
             &mut linker,

@@ -16,7 +16,6 @@ use wasmtime::component::{Component, Linker, Resource};
 use wasmtime::Store;
 
 use crate::core::HostResourceIdProvider;
-use crate::http::HttpClientError;
 
 use self::bindgen::mycelia_alpha::http::interfaces::Client;
 
@@ -44,10 +43,23 @@ mod bindgen {
 }
 
 use thiserror::Error;
+
 #[derive(Error, Debug)]
 pub enum ClientMakeError {
     #[error("wasm guest resource not found.")]
     NotFound,
+}
+
+#[derive(Error, Debug)]
+pub enum HttpClientError {
+    #[error("host client isn't ready. wait and try again.")]
+    NotReady,
+    #[error("unknown failure")]
+    Unknown,
+    #[error("client error")]
+    ClientError { cause: String },
+    #[error("guest produced a malformed request")]
+    BadRequest,
 }
 
 /// Abstract service type defining an HttpClient

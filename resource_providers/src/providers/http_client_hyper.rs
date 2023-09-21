@@ -21,7 +21,7 @@ pub struct HyperClientResourceMaker {
 }
 
 impl HostClientResourceMaker for HyperClientResourceMaker {
-    fn new(&mut self) -> anyhow::Result<&mut crate::host::HostClientResource> {
+    fn new(&mut self) -> anyhow::Result<&mut HostClientResource> {
         let inner = &mut self.inner;
         Ok(inner)
     }
