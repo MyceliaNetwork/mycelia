@@ -234,6 +234,7 @@ async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynEr
                 }
             }
             Err(ClientError::AlreadyStarted) => return Ok(()),
+            // TODO: this should be an Err
             Err(ClientError::NotStarted) => return Ok(()),
             Err(ClientError::ClientError { cause }) => {
                 return Err(cause)?;
@@ -457,12 +458,16 @@ async fn try_deploy(
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    trigger(domain, http_port, rpc_port, &false);
+    trigger(domain, http_port, rpc_port, &false).await;
+
+    poll_server_listening(domain, rpc_port).await;
+
+    println!("🪵 [main.rs:463]~ token ~ \x1b[0;32mpoll_server_listening\x1b[0m = ");
 
     let address = format!("http://{}:{}", domain, rpc_port);
-    let client = DevelopmentClient::connect(address).await;
     let path = format!("./components/{}.wasm", component);
 
+    let client = DevelopmentClient::connect(address.clone()).await;
     match client {
         Ok(mut client) => {
             let message = DeployRequest {
