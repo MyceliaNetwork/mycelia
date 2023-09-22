@@ -244,13 +244,7 @@ async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynEr
     }
 }
 
-async fn spawn_client(
-    domain: &str,
-    http_port: &u16,
-    rpc_port: &u16,
-    open_browser: &bool,
-    background: &bool,
-) {
+async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
     let http_addr = format!("http://{}:{}", domain, http_port);
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
     let (mut client, wait) = start_development_server(http_port, rpc_port);
@@ -286,9 +280,6 @@ async fn spawn_client(
 
     info!("You can reach the development server on {}", http_addr);
 
-    if *background {
-        return;
-    }
     return tokio::select! {
         // Wait for the handlers to exit. Currently this will never happen
         wait = wait => trace!("wait {:?}", wait),
@@ -387,11 +378,32 @@ async fn start(
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
 
     match server_listening(rpc_addr).await {
-        Ok(_) => spawn_client(domain, http_port, rpc_port, open_browser, background).await,
+        Ok(_) => match *background {
+            false => spawn_client(domain, http_port, rpc_port, open_browser).await,
+            true => start_background(http_port, rpc_port).await,
+        },
         Err(e) => error!("Listening Error: {:?}", e),
     }
 
     Ok(())
+}
+
+async fn start_background(http_port: &u16, rpc_port: &u16) {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let log_level = env::var("RUST_LOG").expect("env::var RUST_LOG not set");
+    let _ = Command::new(cargo)
+        .env("RUST_LOG", log_level)
+        .current_dir(project_root())
+        .args(&[
+            "run",
+            "--package=development_server",
+            "--",
+            format!("--http-port={}", http_port).as_str(),
+            format!("--rpc-port={}", rpc_port).as_str(),
+        ])
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Unable to spawn development_server");
 }
 
 async fn stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
@@ -457,20 +469,7 @@ async fn try_deploy(
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-
-    let _status = Command::new(cargo)
-        .current_dir(project_root())
-        .args(&[
-            "run",
-            "--package=development_server",
-            "--",
-            format!("--http-port={}", http_port).as_str(),
-            format!("--rpc-port={}", rpc_port).as_str(),
-        ])
-        .stdout(Stdio::piped())
-        .spawn();
-
+    start_background(http_port, rpc_port).await;
     let _ = poll_server_listening(domain, rpc_port).await;
     let address = format!("http://{}:{}", domain, rpc_port);
     let path = format!("./components/{}.wasm", component);
