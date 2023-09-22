@@ -10,9 +10,8 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
-    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command},
-    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    io::{AsyncBufReadExt, BufReader},
+    process::{Child, ChildStderr, ChildStdout, Command},
     time::{Duration, Instant},
 };
 
@@ -472,11 +471,9 @@ async fn try_deploy(
         .stdout(Stdio::piped())
         .spawn();
 
-    poll_server_listening(domain, rpc_port).await;
-
+    let _ = poll_server_listening(domain, rpc_port).await;
     let address = format!("http://{}:{}", domain, rpc_port);
     let path = format!("./components/{}.wasm", component);
-
     let client = DevelopmentClient::connect(address.clone()).await;
     match client {
         Ok(mut client) => {
@@ -488,6 +485,7 @@ async fn try_deploy(
 
             match response.into_inner() {
                 DeployReply { message } => {
+                    let _ = try_stop(domain, rpc_port).await;
                     if message == "Ok".to_string() {
                         info!("Deployed component to path: {}", path);
                         return Ok(());
@@ -499,8 +497,7 @@ async fn try_deploy(
             };
         }
         Err(e) => {
-            error!("Deployment Error: {:?}", e);
-            return Err("Deployment Error".into());
+            return Err(format!("Deployment Error: {:?}", e).into());
         }
     }
 }
