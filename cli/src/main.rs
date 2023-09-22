@@ -350,9 +350,9 @@ async fn setup_listeners(
         let mut reader = stdout_reader.lines();
         loop {
             match reader.next_line().await {
-                Ok(Some(string)) => trace!("handle_recv: {}", string),
-                Ok(None) => trace!("handle_recv: None"),
-                Err(e) => trace!("handle_recv: {:?}", e),
+                Ok(Some(string)) => trace!("handle_stdout: {}", string),
+                Ok(None) => trace!("handle_stdout: None"),
+                Err(e) => trace!("handle_stdout: {:?}", e),
             }
         }
     });
@@ -361,17 +361,17 @@ async fn setup_listeners(
         let mut reader = stderr_reader.lines();
         loop {
             match reader.next_line().await {
-                Ok(Some(string)) => trace!("handle_send: {}", string),
-                Ok(None) => trace!("handle_send: None"),
-                Err(e) => trace!("handle_send: {:?}", e),
+                Ok(Some(string)) => info!("handle_stderr: {}", string),
+                Ok(None) => info!("handle_stderr: None"),
+                Err(e) => info!("handle_stderr: {:?}", e),
             }
         }
     });
     // Wait for a handler to exit. You already spawned the handlers, you don't need to spawn them again.
     // I'm using select instead of join so we can see any errors immediately.
     tokio::select! {
-        recv = handle_stdout => trace!("recv: {:?}", recv),
-        send = handle_stderr => trace!("send: {:?}", send),
+        recv = handle_stdout => info!("recv: {:?}", recv),
+        send = handle_stderr => info!("send: {:?}", send),
     };
 }
 
