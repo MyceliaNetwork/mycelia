@@ -10,8 +10,9 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    io::{AsyncBufReadExt, BufReader},
-    process::{Child, ChildStderr, ChildStdout, Command},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command},
+    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     time::{Duration, Instant},
 };
 
@@ -456,8 +457,8 @@ async fn try_deploy(
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    let open_browser = false;
-    start(domain, http_port, rpc_port, &open_browser, &true).await?;
+    trigger(domain, http_port, rpc_port, &false);
+
     let address = format!("http://{}:{}", domain, rpc_port);
     let client = DevelopmentClient::connect(address).await;
     let path = format!("./components/{}.wasm", component);
@@ -495,4 +496,121 @@ fn project_root() -> PathBuf {
         .nth(1)
         .expect("CARGO_MANIFEST_DIR not found")
         .to_path_buf()
+}
+
+/// old school development server start
+
+async fn trigger(domain: &String, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
+    let (_client, tx_send, _tx_recv, wait) =
+        start_server_deploy(domain, http_port, rpc_port, open_browser);
+
+    tx_send.send("initialize".as_bytes().to_vec()).ok();
+
+    // Wait for the handlers to exit. Currently this will never happen
+    wait.await
+}
+
+fn start_server_deploy(
+    domain: &String,
+    http_port: &u16,
+    rpc_port: &u16,
+    open_browser: &bool,
+) -> (
+    DevelopmentServerClient,
+    UnboundedSender<Vec<u8>>,
+    UnboundedSender<Vec<u8>>,
+    impl Future<Output = ()>,
+) {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let mut process = Command::new(cargo)
+        .current_dir(project_root())
+        .args(&[
+            "run",
+            "--package=development_server",
+            "--",
+            format!("--http-port={}", http_port).as_str(),
+            format!("--rpc-port={}", rpc_port).as_str(),
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("Unable to spawn process");
+
+    let proc_id = process.id().expect("Unable to fetch process id");
+    println!("proc id: {}", proc_id);
+
+    let stdin = process.stdin.take().unwrap();
+    let stdout = process.stdout.take().unwrap();
+    // let stderr = process.stderr.take().unwrap();
+
+    let writer = BufWriter::new(stdin);
+    let reader = BufReader::new(stdout);
+
+    let (tx_send, rx_send) = unbounded_channel::<Vec<u8>>();
+    let (tx_recv, rx_recv) = unbounded_channel::<Vec<u8>>();
+
+    println!("setting up tx,rx");
+    // This future waits for handlers to exit, we don't want to await it here.
+    // Return it instead so the caller can await it.
+    let wait = setup_listeners_deploy(reader, writer, rx_send, rx_recv);
+
+    // Send initialize request
+    println!("initialize request");
+    tx_send.send("initialize".as_bytes().to_vec()).ok();
+    let client = DevelopmentServerClient { process };
+
+    (client, tx_send, tx_recv, wait)
+}
+
+async fn setup_listeners_deploy(
+    mut reader: BufReader<ChildStdout>,
+    mut writer: BufWriter<ChildStdin>,
+    mut rx_send: UnboundedReceiver<Vec<u8>>,
+    mut rx_recv: UnboundedReceiver<Vec<u8>>,
+) {
+    let handle_recv = tokio::spawn(async move {
+        loop {
+            // Wait until a message is available instead of constantly polling for a message.
+            match rx_recv.recv().await {
+                Some(data) => {
+                    println!("rx_recv got: {:?}", String::from_utf8(data));
+
+                    let mut buf = String::new();
+                    let _ = reader.read_line(&mut buf);
+                }
+                None => {
+                    println!("rx_recv: quitting loop");
+                    break;
+                }
+            }
+        }
+    });
+
+    let handle_send = tokio::spawn(async move {
+        loop {
+            // Wait until a message is available instead of constantly polling for a message.
+            match rx_send.recv().await {
+                Some(data) => {
+                    println!("rx_send: got something");
+                    let str = String::from_utf8(data).expect("invalid data for parse");
+                    println!("rx_send: sending to LSP: {:?}", str);
+
+                    _ = writer.write_all(str.as_bytes());
+                }
+                None => {
+                    println!("rx_recv: quitting loop");
+                    break;
+                }
+            }
+        }
+    });
+
+    // Wait for a handler to exit. You already spawned the handlers, you don't need to spawn them again.
+    // I'm using select instead of join so we can see any errors immediately.
+    tokio::select! {
+       send = handle_send => println!("{send:?}"),
+       recv = handle_recv => println!("{recv:?}"),
+    };
 }
