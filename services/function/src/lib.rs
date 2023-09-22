@@ -264,8 +264,7 @@ pub mod service {
 mod test {
     // TODO need to inject the mycelia http client provider codes here
     use super::types::*;
-    use resource_providers::core::{IdProductionError, HostResourceIdProvider};
-    use resource_providers::providers::http_client_hyper::HyperClientResourceMaker;
+    use resource_providers::core::IdProductionError;
     use tower::util::BoxService;
     use tower::{service_fn, ServiceBuilder, ServiceExt};
     use wasmtime::component::{Component, Linker};
@@ -273,7 +272,7 @@ mod test {
     use wasmtime_wasi::preview2::{
         command::add_to_linker, Table, WasiCtx, WasiCtxBuilder, WasiView,
     };
-    use resource_providers::http::HostClientResourceMaker;
+    use resource_providers::http::{HostClientResourceMaker, HostClientResource};
 
 
     impl WasiView for ServerWasiView {
@@ -308,7 +307,7 @@ mod test {
     pub(crate) struct ServerWasiView {
         pub(crate) table: Table,
         pub(crate) ctx: WasiCtx,
-        pub(crate) http_client_maker: HyperClientResourceMaker,
+        pub(crate) host_client_resource: HostClientResource
     }
 
     impl ServerWasiView {
@@ -323,20 +322,25 @@ mod test {
                 Ok(100u32)
             }
 
-            let service = ServiceBuilder::new().service_fn(service_fn).boxed();
-            let http_client_maker = resource_providers::providers::http_client_hyper::new(service);
+            // This would be reused by multiple resources
+            let resource_id_provider = ServiceBuilder::new().service_fn(service_fn).boxed();
 
+            // An instance of an actual maker
+            let http_client_maker = resource_providers::providers::http_client_hyper::new_client_maker();
+
+            // Our resource with the actual maker and id provider
+            let host_client_resource = HostClientResource::new(http_client_maker, resource_id_provider);
             Self {
                 table,
                 ctx,
-                http_client_maker,
+                host_client_resource,
             }
         }
     }
 
     impl HostClientResourceMaker for ServerWasiView {
         fn new(&mut self) -> anyhow::Result<&mut resource_providers::http::HostClientResource> {
-            self.http_client_maker.new()
+            Ok(&mut self.host_client_resource)
         }
     }
 
@@ -373,7 +377,7 @@ mod test {
         let result: HttpResponse = bindings
             .call_handle_request(&mut store, &should_echo)
             .await?;
-        
+
         assert_eq!(result.status, 200u16);
         assert_eq!(result.body, vec![2, 4, 6]);
         Ok(())

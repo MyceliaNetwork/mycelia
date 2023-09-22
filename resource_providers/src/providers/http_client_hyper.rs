@@ -18,32 +18,8 @@ use crate::http::{
     HostClientResourceMaker, HttpClientError,
 };
 
-use crate::core::HostResourceIdProvider;
 
-pub struct HyperClientResourceMaker {
-    inner: HostClientResource,
-}
-
-/// `HostClientResourceMaker` by our core wasm resource provider framework (pattern?)
-/// to provide the actual clients when requested by wasm
-impl HostClientResourceMaker for HyperClientResourceMaker {
-    fn new(&mut self) -> anyhow::Result<&mut HostClientResource> {
-        let inner = &mut self.inner;
-        Ok(inner)
-    }
-}
-
-// Produce a new http client maker to be used in a host wasm runtime view
-// which provides http component functionality to a guest running in the runtime
-pub fn new(id_provider: HostResourceIdProvider) -> HyperClientResourceMaker {
-    let client_maker = new_client_maker();
-
-    let inner = HostClientResource::new(client_maker, id_provider);
-
-    HyperClientResourceMaker { inner }
-}
-
-fn new_client_maker() -> HostClientMaker {
+pub fn new_client_maker() -> HostClientMaker {
     let service = ServiceBuilder::new().service_fn(|_v: ()| async {
         let service = HyperHostClient;
 

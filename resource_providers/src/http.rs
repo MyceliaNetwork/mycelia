@@ -85,10 +85,10 @@ pub type HostClient = BoxService<ClientRequest, ClientResult, HttpClientError>;
 /// for example see `providers::hyper::new_client_maker`
 pub type HostClientMaker = BoxService<(), HostClient, ClientMakeError>;
 
-/// Manages the association between guest wasm http clients and their host implementation instances.
+/// Manages the associations between guest wasm http clients and their host instances.
 pub struct HostClientResource {
     pub resource_id_provider: HostResourceIdProvider,
-    pub client_maker: BoxService<(), HostClient, ClientMakeError>,
+    pub client_maker: HostClientMaker,
     pub clients: HashMap<u32, HostClient>,
 }
 
@@ -130,7 +130,7 @@ impl HostClientInterface for HostClientResource {
         Ok(Resource::new_own(new_id))
     }
 
-    /// Attempts to make an HttpRequest using some resource
+    /// Attempts to make an HttpRequest `req` using some resource `guest_self`
     async fn send(
         &mut self,
         guest_self: Resource<Client>,
@@ -146,7 +146,7 @@ impl HostClientInterface for HostClientResource {
         }
     }
 
-    /// Called when a resource falls is released by a guest
+    /// Called when a resource is released by a guest
     fn drop(&mut self, val: Resource<Client>) -> anyhow::Result<()> {
         let id = val.rep();
         self.clients.remove(&id);
@@ -161,7 +161,7 @@ pub trait HostClientResourceMaker {
     fn new(&mut self) -> anyhow::Result<&mut HostClientResource>;
 }
 
-// tell the linker how to provide access to the http client command world
+// tell the linker how to provide access to the http client resource
 // with the help of the `HostClientResourceMaker` trait
 // and instantiate the http client command world
 //
@@ -175,6 +175,8 @@ pub async fn setup_with_wasmtime<T: HostClientResourceMaker + Send>(
         v.new().expect("failed to produce new host client resource")
     })?;
 
+    // TODO ask in zulip chat about relationship here and w/ https://docs.wasmtime.dev/api/wasmtime/component/struct.Linker.html#method.instantiate_async
+    // TODO expand macro generation and check out what the code is doing
     let _ = Command::instantiate_async(store, component, linker).await?;
 
     Ok(())
