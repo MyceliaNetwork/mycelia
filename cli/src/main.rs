@@ -458,7 +458,19 @@ async fn try_deploy(
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    trigger(domain, http_port, rpc_port, &false).await;
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+
+    let _status = Command::new(cargo)
+        .current_dir(project_root())
+        .args(&[
+            "run",
+            "--package=development_server",
+            "--",
+            format!("--http-port={}", http_port).as_str(),
+            format!("--rpc-port={}", rpc_port).as_str(),
+        ])
+        .stdout(Stdio::piped())
+        .spawn();
 
     poll_server_listening(domain, rpc_port).await;
 
