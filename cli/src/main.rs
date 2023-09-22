@@ -485,6 +485,7 @@ async fn try_deploy(
 
             match response.into_inner() {
                 DeployReply { message } => {
+                    // TODO: only call try_stop when server is not already listening
                     let _ = try_stop(domain, rpc_port).await;
                     if message == "Ok".to_string() {
                         info!("Deployed component to path: {}", path);
@@ -497,6 +498,8 @@ async fn try_deploy(
             };
         }
         Err(e) => {
+            // TODO: only call try_stop when server is not already listening
+            let _ = try_stop(domain, rpc_port).await;
             return Err(format!("Deployment Error: {:?}", e).into());
         }
     }
