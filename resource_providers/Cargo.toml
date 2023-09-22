@@ -13,6 +13,8 @@ wit-bindgen = { workspace = true }
 http = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
-tower = { version = "0.4.13", features = ["util"] }
-hyper = { version = "0.14.27", features = ["full"]}
+tower = { workspace = true, features = ["util"] }
+hyper = { workspace = true, features = ["full"]}
 tokio = { workspace = true, features = ["full"]}
+
+hyper-tls = { version = "0.5.0"}

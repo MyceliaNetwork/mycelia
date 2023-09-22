@@ -74,7 +74,11 @@ impl Service<ClientRequest> for HyperHostClient {
         // in the future we should Arc<Mutex<Client>>
         // and implement poll correctly
         let client = hyper::Client::new();
+        let https = hyper_tls::HttpsConnector::new();
+        let client = hyper::Client::builder().build(https);
+
         Box::pin(async move {
+            // TODO we need to lower non-fatal errors to the guest
             let resp = client.request(req.try_into()?).await?;
             let (parts, mut data) = resp.into_parts();
 
@@ -126,6 +130,7 @@ impl TryInto<Request<Body>> for ClientRequest {
 
 impl From<hyper::Error> for HttpClientError {
     fn from(value: hyper::Error) -> Self {
+
         let cause = value.to_string();
         HttpClientError::ClientError { cause }
     }

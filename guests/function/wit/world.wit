@@ -6,9 +6,6 @@ package mycelia:execution@0.0.1
 // We MUST move towards adoping support.
 // This is non-negotiable.
 
-use wasi:http/types as wasi-http-types
-use wasi:http/incoming-handler as wasi-http-handler
-
 interface types {
 
   type status = u16
@@ -51,15 +48,6 @@ interface types {
 
 world function-world {
   use types.{http-request, http-response}
-
-  export exports: interface {
-    resource foo-bar {
-      echo: func(v: string) -> string
-    }
-
-    produce: func() -> own<foo-bar>
-  }
-
   export handle-request: func(req: http-request) -> http-response
 }
 

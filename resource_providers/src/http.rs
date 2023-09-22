@@ -7,6 +7,7 @@
 //! This is intended to be used by the wasmtime hosts (like `mycelia`) to provide HTTP clients to wasm component guests.
 //! It's pretty straightforward :)
 
+use core::panic;
 use std::collections::HashMap;
 
 use async_trait::async_trait;
@@ -64,7 +65,7 @@ pub enum HttpClientError {
     NotReady,
     #[error("unknown failure")]
     Unknown,
-    #[error("client error")]
+    #[error("client error - {cause:?}")]
     ClientError { cause: String },
     #[error("guest produced a malformed request")]
     BadRequest,
@@ -122,8 +123,8 @@ impl HostClientInterface for HostClientResource {
         let new_client = rdy_client.call(()).await?;
 
         if let Some(_) = self.clients.insert(new_id, new_client) {
-                      // print error. This is indicative of a bug in the upstream id provider client
-            return Err(ClientMakeError::BadResourceId);
+            // This is indicative of a bug in the upstream id provider client
+            panic!("Existing http_client resource found for resource id {:#?}", new_id)
         }
 
         Ok(Resource::new_own(new_id))
@@ -136,9 +137,13 @@ impl HostClientInterface for HostClientResource {
         req: ClientRequest,
     ) -> anyhow::Result<ClientResult> {
         let id = guest_self.rep();
-        let client = self.clients.get_mut(&id).ok_or(HttpClientError::HostResourceNotFound)?;
-        let client = client.ready().await?;
-        Ok(client.call(req).await?)
+        match self.clients.get_mut(&id) {
+            Some(client) => {
+                let client = client.ready().await?;
+                Ok(client.call(req).await?)
+            },
+            None => panic!("client requested http_client resource id {:#?} which does not exist. Guest {:#?}", id, guest_self),
+        }
     }
 
     /// Called when a resource falls is released by a guest

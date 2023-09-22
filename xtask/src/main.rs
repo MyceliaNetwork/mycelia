@@ -177,7 +177,6 @@ fn build_component(guest: &Guest) -> Result<(), DynError> {
             &cmd_wasm_guest,
             &cmd_wasi_snapshot,
             &cmd_component_output,
-            "-vvv"
         ])
         .status()?;
 

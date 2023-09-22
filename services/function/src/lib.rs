@@ -370,13 +370,10 @@ mod test {
             uri: "foo".into(),
         };
 
-        let res = bindings.exports().call_produce(&mut store).await?;
-        let t = res.ty();
-
         let result: HttpResponse = bindings
             .call_handle_request(&mut store, &should_echo)
             .await?;
-
+        
         assert_eq!(result.status, 200u16);
         assert_eq!(result.body, vec![2, 4, 6]);
         Ok(())
