@@ -121,7 +121,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "warn")
+        env::set_var("RUST_LOG", "info")
     }
 
     env_logger::init();
