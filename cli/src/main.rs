@@ -391,10 +391,11 @@ async fn start(
 async fn start_background(http_port: &u16, rpc_port: &u16) {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let _ = Command::new(cargo)
-        .env("RUST_LOG", "warn")
+        .env("RUST_LOG", "off")
         .current_dir(project_root())
         .args(&[
             "run",
+            "--quiet",
             "--package=development_server",
             "--",
             format!("--http-port={}", http_port).as_str(),
