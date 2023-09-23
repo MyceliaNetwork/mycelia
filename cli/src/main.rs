@@ -390,9 +390,8 @@ async fn start(
 
 async fn start_background(http_port: &u16, rpc_port: &u16) {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let log_level = env::var("RUST_LOG").expect("env::var RUST_LOG not set");
     let _ = Command::new(cargo)
-        .env("RUST_LOG", log_level)
+        .env("RUST_LOG", "warn")
         .current_dir(project_root())
         .args(&[
             "run",
@@ -401,7 +400,7 @@ async fn start_background(http_port: &u16, rpc_port: &u16) {
             format!("--http-port={}", http_port).as_str(),
             format!("--rpc-port={}", rpc_port).as_str(),
         ])
-        .stdout(Stdio::piped())
+        .stdout(Stdio::null())
         .spawn()
         .expect("Unable to spawn development_server");
 }
@@ -469,7 +468,7 @@ async fn try_deploy(
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    start_background(http_port, rpc_port).await;
+    let _ = start(domain, http_port, rpc_port, &false, &true).await;
     let _ = poll_server_listening(domain, rpc_port).await;
     let address = format!("http://{}:{}", domain, rpc_port);
     let path = format!("./components/{}.wasm", component);
