@@ -494,6 +494,8 @@ async fn try_deploy(
         .is_ok_and(|s| s == &ServerState::NotStarted)
     {
         let _ = start(domain, http_port, rpc_port, &false, &true).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let _ = poll_server_state(domain, rpc_port).await;
     };
 
     if server_state.is_ok() {
@@ -506,7 +508,10 @@ async fn try_deploy(
                     component_path: path.clone(),
                 };
                 let request = tonic::Request::new(message);
-                let response = client.deploy_component(request).await?;
+                let response = client
+                    .deploy_component(request)
+                    .await
+                    .expect("Deploy component failed");
                 match response.into_inner() {
                     DeployReply { message } => {
                         if server_state.unwrap() == ServerState::NotStarted {
@@ -522,11 +527,12 @@ async fn try_deploy(
                     }
                 };
             }
-            Err(e) => {
+            Err(err) => {
+                println!("Client Err: {:?}", err);
                 if server_state.unwrap() == ServerState::NotStarted {
                     try_stop(domain, rpc_port).await?;
                 }
-                return Err(format!("Deployment Error: {:?}", e).into());
+                return Err(format!("Deployment Error: {:?}", err).into());
             }
         }
     }
