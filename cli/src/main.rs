@@ -29,7 +29,7 @@ pub enum ServerError {
     Unknown,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum ServerState {
     NotStarted,
     StartingUp,
@@ -201,7 +201,10 @@ Status code: {}",
     Ok(())
 }
 
-async fn server_state(address: String) -> Result<ServerState, ServerError> {
+/// We use the tonic crate to send an EchoRequest to the development_server through a gRPC address
+/// The `just_started` argument is used to return ServerState::StartingUp in stead of
+/// ServerState::NotStarted when "transport error" is returned by the gRPC client.
+async fn server_state(address: String, just_started: &bool) -> Result<ServerState, ServerError> {
     let payload = "cli::server_state()".to_string();
     match DevelopmentClient::connect(address).await {
         Ok(mut client) => {
@@ -227,21 +230,32 @@ async fn server_state(address: String) -> Result<ServerState, ServerError> {
             };
         }
         Err(err) => match err.to_string().as_str() {
-            "transport error" => return Ok(ServerState::NotStarted),
-            err => return Err(ServerError::ServerError { cause: err.into() }),
+            "transport error" => {
+                return match *just_started {
+                    true => Ok(ServerState::StartingUp),
+                    false => Ok(ServerState::NotStarted),
+                };
+            }
+            err => {
+                return Err(ServerError::ServerError { cause: err.into() });
+            }
         },
     };
 }
 
-async fn poll_server_state(domain: &str, rpc_port: &u16) -> Result<ServerState, PollError> {
+async fn poll_server_state(
+    domain: &str,
+    rpc_port: &u16,
+    just_started: &bool,
+) -> Result<ServerState, PollError> {
     let start = Instant::now();
-    let timeout = Duration::from_secs(5);
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    let timeout = Duration::from_secs(10);
 
     loop {
         let rpc_addr = format!("http://{}:{}", domain, rpc_port);
-        match server_state(rpc_addr).await {
+        let state = server_state(rpc_addr, just_started).await;
+
+        match state {
             Ok(ServerState::StartingUp) => {
                 tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -286,7 +300,7 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
     debug!("RPC server listening on {}", rpc_addr);
 
     if *open_browser {
-        let server_state = poll_server_state(domain, rpc_port).await;
+        let server_state = poll_server_state(domain, rpc_port, &true).await;
         if server_state.is_ok_and(|s| s == ServerState::Started) {
             match open::that(&http_addr) {
                 Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
@@ -394,7 +408,7 @@ async fn start(
     info!("Starting development server");
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
 
-    match server_state(rpc_addr).await {
+    match server_state(rpc_addr, &false).await {
         Ok(_) => match *background {
             false => spawn_client(domain, http_port, rpc_port, open_browser).await,
             true => start_background(http_port, rpc_port).await,
@@ -488,14 +502,13 @@ async fn try_deploy(
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    let server_state = poll_server_state(domain, rpc_port).await;
+    let server_state = poll_server_state(domain, rpc_port, &false).await;
     if server_state
         .as_ref()
         .is_ok_and(|s| s == &ServerState::NotStarted)
     {
         let _ = start(domain, http_port, rpc_port, &false, &true).await;
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        let _ = poll_server_state(domain, rpc_port).await;
+        let _ = poll_server_state(domain, rpc_port, &true).await;
     };
 
     if server_state.is_ok() {
@@ -528,7 +541,6 @@ async fn try_deploy(
                 };
             }
             Err(err) => {
-                println!("Client Err: {:?}", err);
                 if server_state.unwrap() == ServerState::NotStarted {
                     try_stop(domain, rpc_port).await?;
                 }
