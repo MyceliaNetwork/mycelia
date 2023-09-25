@@ -134,7 +134,7 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), DynError> {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info")
     }
@@ -201,9 +201,9 @@ Status code: {}",
     Ok(())
 }
 
-/// We use the tonic crate to send an EchoRequest to the development_server through a gRPC address
-/// The `just_started` argument is used to return ServerState::StartingUp in stead of
-/// ServerState::NotStarted when "transport error" is returned by the gRPC client.
+// We use the tonic crate to send an EchoRequest to the development_server through a gRPC address
+// The `just_started` argument is used to return ServerState::StartingUp in stead of
+// ServerState::NotStarted when "transport error" is returned by the gRPC client.
 async fn server_state(address: String, just_started: &bool) -> Result<ServerState, ServerError> {
     let payload = "cli::server_state()".to_string();
     match DevelopmentClient::connect(address).await {
