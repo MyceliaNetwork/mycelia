@@ -23,14 +23,29 @@ use development::{DeployReply, DeployRequest, EchoReply, EchoRequest, Empty};
 
 #[derive(Error, Debug)]
 pub enum ClientError {
-    #[error("host client isn't ready. wait and try again.")]
-    NotReady,
+    #[error("client error")]
+    ClientError { cause: String },
+    #[error("unknown failure")]
+    Unknown,
+}
+
+#[derive(PartialEq)]
+pub enum ServerState {
+    NotStarted,
+    StartingUp,
+    Started,
+}
+
+#[derive(Error, Debug)]
+pub enum PollError {
     #[error("not yet started")]
     NotStarted,
     #[error("already started")]
-    AlreadyStarted,
+    Started,
     #[error("client error")]
     ClientError { cause: String },
+    #[error("timeout")]
+    Timeout,
     #[error("unknown failure")]
     Unknown,
 }
@@ -186,13 +201,12 @@ Status code: {}",
     Ok(())
 }
 
-async fn server_listening(address: String) -> Result<(), ClientError> {
-    let payload = "poll_dev_server";
-
+async fn server_state(address: String) -> Result<ServerState, ClientError> {
+    let payload = "cli::server_state()".to_string();
     match DevelopmentClient::connect(address).await {
         Ok(mut client) => {
             let message = EchoRequest {
-                message: payload.to_string(),
+                message: payload.clone(),
             };
             let request = tonic::Request::new(message);
             let response = client.echo(request).await;
@@ -201,22 +215,25 @@ async fn server_listening(address: String) -> Result<(), ClientError> {
                 EchoReply { message } => {
                     if message == payload.to_string() {
                         warn!("Development server already listening");
-                        return Err(ClientError::AlreadyStarted);
+                        return Ok(ServerState::Started);
                     } else {
-                        error!("Error echoing message to RPC server");
-                        return Err(ClientError::NotReady);
+                        error!(
+                            "Unexpected EchoReply message from RPC server. Message: {}",
+                            message
+                        );
                     }
+                    return Ok(ServerState::StartingUp);
                 }
             };
         }
         Err(err) => match err.to_string().as_str() {
-            "transport error" => return Ok(()),
+            "transport error" => return Ok(ServerState::NotStarted),
             err => return Err(ClientError::ClientError { cause: err.into() }),
         },
     };
 }
 
-async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
+async fn poll_server_state(domain: &str, rpc_port: &u16) -> Result<ServerState, PollError> {
     let start = Instant::now();
     let timeout = Duration::from_secs(5);
 
@@ -224,22 +241,20 @@ async fn poll_server_listening(domain: &str, rpc_port: &u16) -> Result<(), DynEr
 
     loop {
         let rpc_addr = format!("http://{}:{}", domain, rpc_port);
-        match server_listening(rpc_addr).await {
-            Err(ClientError::NotReady) => {
+        match server_state(rpc_addr).await {
+            Ok(ServerState::StartingUp) => {
                 tokio::time::sleep(Duration::from_secs(1)).await;
 
                 if start.elapsed() > timeout {
-                    return Err("Timeout waiting for server to start")?;
+                    return Err(PollError::Timeout);
                 }
             }
-            Err(ClientError::AlreadyStarted) => return Ok(()),
-            // TODO: this should be an Err
-            Err(ClientError::NotStarted) => return Ok(()),
+            Ok(ServerState::Started) => return Ok(ServerState::Started),
+            Ok(ServerState::NotStarted) => return Ok(ServerState::NotStarted),
             Err(ClientError::ClientError { cause }) => {
-                return Err(cause)?;
+                return Err(PollError::ClientError { cause })
             }
-            Err(ClientError::Unknown) => return Err("Unknown error")?,
-            Ok(_) => return Ok(()),
+            Err(ClientError::Unknown) => return Err(PollError::Unknown),
         };
     }
 }
@@ -271,10 +286,12 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
     debug!("RPC server listening on {}", rpc_addr);
 
     if *open_browser {
-        let _ = poll_server_listening(domain, rpc_port).await;
-        match open::that(&http_addr) {
-            Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
-            Err(err) => error!("An error occurred when opening '{}': {}", http_addr, err),
+        let server_state = poll_server_state(domain, rpc_port).await;
+        if server_state.is_ok_and(|s| s == ServerState::Started) {
+            match open::that(&http_addr) {
+                Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
+                Err(err) => error!("An error occurred when opening '{}': {}", http_addr, err),
+            }
         }
     }
 
@@ -377,7 +394,7 @@ async fn start(
     info!("Starting development server");
     let rpc_addr = format!("http://{}:{}", domain, rpc_port);
 
-    match server_listening(rpc_addr).await {
+    match server_state(rpc_addr).await {
         Ok(_) => match *background {
             false => spawn_client(domain, http_port, rpc_port, open_browser).await,
             true => start_background(http_port, rpc_port).await,
@@ -446,7 +463,9 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
 /*
  * Usage:
  *
- * cargo run deploy --component-path="./components/meh.wasm"
+ * cargo run deploy --component=game
+ *
+ * This will take the file "./components/game.wasm" and deploy it.
  */
 async fn deploy(
     domain: &String,
@@ -470,7 +489,7 @@ async fn try_deploy(
     component: &String,
 ) -> Result<(), DynError> {
     let _ = start(domain, http_port, rpc_port, &false, &true).await;
-    let _ = poll_server_listening(domain, rpc_port).await;
+    let _ = poll_server_state(domain, rpc_port).await;
     let address = format!("http://{}:{}", domain, rpc_port);
     let path = format!("./components/{}.wasm", component);
     let client = DevelopmentClient::connect(address.clone()).await;
