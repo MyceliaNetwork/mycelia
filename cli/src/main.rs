@@ -22,9 +22,9 @@ use development::development_client::DevelopmentClient;
 use development::{DeployReply, DeployRequest, EchoReply, EchoRequest, Empty};
 
 #[derive(Error, Debug)]
-pub enum ClientError {
-    #[error("client error")]
-    ClientError { cause: String },
+pub enum ServerError {
+    #[error("development_server error")]
+    ServerError { cause: String },
     #[error("unknown failure")]
     Unknown,
 }
@@ -42,8 +42,8 @@ pub enum PollError {
     NotStarted,
     #[error("already started")]
     Started,
-    #[error("client error")]
-    ClientError { cause: String },
+    #[error("development_server error")]
+    ServerError { cause: String },
     #[error("timeout")]
     Timeout,
     #[error("unknown failure")]
@@ -201,7 +201,7 @@ Status code: {}",
     Ok(())
 }
 
-async fn server_state(address: String) -> Result<ServerState, ClientError> {
+async fn server_state(address: String) -> Result<ServerState, ServerError> {
     let payload = "cli::server_state()".to_string();
     match DevelopmentClient::connect(address).await {
         Ok(mut client) => {
@@ -228,7 +228,7 @@ async fn server_state(address: String) -> Result<ServerState, ClientError> {
         }
         Err(err) => match err.to_string().as_str() {
             "transport error" => return Ok(ServerState::NotStarted),
-            err => return Err(ClientError::ClientError { cause: err.into() }),
+            err => return Err(ServerError::ServerError { cause: err.into() }),
         },
     };
 }
@@ -251,10 +251,10 @@ async fn poll_server_state(domain: &str, rpc_port: &u16) -> Result<ServerState, 
             }
             Ok(ServerState::Started) => return Ok(ServerState::Started),
             Ok(ServerState::NotStarted) => return Ok(ServerState::NotStarted),
-            Err(ClientError::ClientError { cause }) => {
-                return Err(PollError::ClientError { cause })
+            Err(ServerError::ServerError { cause }) => {
+                return Err(PollError::ServerError { cause })
             }
-            Err(ClientError::Unknown) => return Err(PollError::Unknown),
+            Err(ServerError::Unknown) => return Err(PollError::Unknown),
         };
     }
 }
@@ -371,7 +371,7 @@ async fn setup_listeners(
         loop {
             match reader.next_line().await {
                 Ok(Some(string)) => info!("handle_stderr: {}", string),
-                Ok(None) => info!("handle_stderr: None"),
+                Ok(None) => trace!("handle_stderr: None"),
                 Err(e) => info!("handle_stderr: {:?}", e),
             }
         }
@@ -488,39 +488,50 @@ async fn try_deploy(
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    let _ = start(domain, http_port, rpc_port, &false, &true).await;
-    let _ = poll_server_state(domain, rpc_port).await;
-    let address = format!("http://{}:{}", domain, rpc_port);
-    let path = format!("./components/{}.wasm", component);
-    let client = DevelopmentClient::connect(address.clone()).await;
-    match client {
-        Ok(mut client) => {
-            let message = DeployRequest {
-                component_path: path.clone(),
-            };
-            let request = tonic::Request::new(message);
-            let response = client.deploy_component(request).await?;
+    let server_state = poll_server_state(domain, rpc_port).await;
+    if server_state
+        .as_ref()
+        .is_ok_and(|s| s == &ServerState::NotStarted)
+    {
+        let _ = start(domain, http_port, rpc_port, &false, &true).await;
+    };
 
-            match response.into_inner() {
-                DeployReply { message } => {
-                    // TODO: only call try_stop when server is not already listening
-                    let _ = try_stop(domain, rpc_port).await;
-                    if message == "Ok".to_string() {
-                        info!("Deployed component to path: {}", path);
-                        return Ok(());
-                    } else {
-                        error!("Error deploying component. Error: {:?}", message);
-                        return Err("Error deploying component. Error".into());
+    if server_state.is_ok() {
+        let address = format!("http://{}:{}", domain, rpc_port);
+        let path = format!("./components/{}.wasm", component);
+        let client = DevelopmentClient::connect(address.clone()).await;
+        match client {
+            Ok(mut client) => {
+                let message = DeployRequest {
+                    component_path: path.clone(),
+                };
+                let request = tonic::Request::new(message);
+                let response = client.deploy_component(request).await?;
+                match response.into_inner() {
+                    DeployReply { message } => {
+                        if server_state.unwrap() == ServerState::NotStarted {
+                            try_stop(domain, rpc_port).await?;
+                        }
+                        if message == "Ok".to_string() {
+                            info!("Deployed component to path: {}", path);
+                            return Ok(());
+                        } else {
+                            error!("Error deploying component. Error: {:?}", message);
+                            return Err("Error deploying component. Error".into());
+                        }
                     }
+                };
+            }
+            Err(e) => {
+                if server_state.unwrap() == ServerState::NotStarted {
+                    try_stop(domain, rpc_port).await?;
                 }
-            };
-        }
-        Err(e) => {
-            // TODO: only call try_stop when server is not already listening
-            let _ = try_stop(domain, rpc_port).await;
-            return Err(format!("Deployment Error: {:?}", e).into());
+                return Err(format!("Deployment Error: {:?}", e).into());
+            }
         }
     }
+
+    return Err("Deployment Error: Server not yet started".into());
 }
 
 fn project_root() -> PathBuf {
