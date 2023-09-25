@@ -110,7 +110,7 @@ enum Commands {
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
     },
-    /// Deploy your Mycelia project
+    /// Deploy your Mycelia component
     Deploy {
         /// The component inside `./components/` which is being deployed.
         #[clap(long)]
