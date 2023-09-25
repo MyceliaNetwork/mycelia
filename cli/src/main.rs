@@ -21,15 +21,7 @@ pub mod development {
 use development::development_client::DevelopmentClient;
 use development::{DeployReply, DeployRequest, EchoReply, EchoRequest, Empty};
 
-#[derive(Error, Debug)]
-pub enum ServerError {
-    #[error("development_server error")]
-    ServerError { cause: String },
-    #[error("unknown failure")]
-    Unknown,
-}
-
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 pub enum ServerState {
     NotStarted,
     StartingUp,
@@ -37,6 +29,12 @@ pub enum ServerState {
 }
 
 #[derive(Error, Debug)]
+pub enum ServerError {
+    #[error("development_server error")]
+    ServerError { cause: String },
+}
+
+#[derive(Debug, Error)]
 pub enum PollError {
     #[error("not yet started")]
     NotStarted,
@@ -46,8 +44,6 @@ pub enum PollError {
     ServerError { cause: String },
     #[error("timeout")]
     Timeout,
-    #[error("unknown failure")]
-    Unknown,
 }
 
 type DynError = Box<dyn Error>;
@@ -268,7 +264,6 @@ async fn poll_server_state(
             Err(ServerError::ServerError { cause }) => {
                 return Err(PollError::ServerError { cause })
             }
-            Err(ServerError::Unknown) => return Err(PollError::Unknown),
         };
     }
 }
@@ -413,7 +408,10 @@ async fn start(
             false => spawn_client(domain, http_port, rpc_port, open_browser).await,
             true => start_background(http_port, rpc_port).await,
         },
-        Err(e) => error!("Listening Error: {:?}", e),
+        Err(err) => {
+            error!("Listening Error: {:?}", err);
+            return Err(format!("Server error: {:?}", err).into());
+        }
     }
 
     Ok(())
