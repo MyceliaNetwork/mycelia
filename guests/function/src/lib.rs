@@ -12,22 +12,23 @@ wit_bindgen::generate!({
     // namely the `run` function.
     exports: {
         world: TestFunction,
-        "mycelia:execution/function-interface": TestFunction
     },
 });
 
-// Todo produce exports..
-
-// Todo check how the macro is being expanded
-// We might actually be able to provide this via a lib
-// Using wit-bindgen :(
-
-// A Simple Test Function that echos what
-// is passed to it. Or, returns "hello world"
-struct TestFunction;
+pub struct TestFunction;
 
 impl Guest for TestFunction {
     fn handle_request(req: HttpRequest) -> HttpResponse {
+        let mut client = mycelia_http::new_http_client();
+
+        let request = mycelia_http::HttpRequest {
+            method: mycelia_http::HttpMethod::Get,
+            headers: vec![],
+            body: vec![],
+            uri: "https://google.com".to_string(),
+        };
+
+        client.send(&request);
         let body = if req.body.len() > 0 {
             req.body
         } else {

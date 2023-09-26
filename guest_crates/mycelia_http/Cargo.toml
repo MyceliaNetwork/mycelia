@@ -1,0 +1,25 @@
+[package]
+name = "mycelia_http"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "guest side wasm http-client for general use in a compatible wasm component host. See docs for more info!"
+authors = ["Hazel Rowell <hazel+mycelia@departure.dev>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+wit-bindgen = { workspace = true }
+http = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+tower = { version = "0.4.13", features = ["util"] }
+hyper = { version = "0.14.27", features = ["full"]}
+tokio = { workspace = true, features = ["full"]}
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]

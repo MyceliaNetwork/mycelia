@@ -2,11 +2,13 @@ mod bindgen {
     use wasmtime::component::*;
 
     bindgen!({
-      path: "../../guests/function/wit/function.wit",
+      path: "../../guests/function/wit",
+      world: "function-world",
       async: true
     });
 }
 
+struct Test;
 pub mod types {
     pub type HttpRequest = crate::bindgen::mycelia::execution::types::HttpRequest;
     pub type HttpResponse = crate::bindgen::mycelia::execution::types::HttpResponse;
@@ -260,13 +262,18 @@ pub mod service {
 
 #[cfg(test)]
 mod test {
+    // TODO need to inject the mycelia http client provider codes here
     use super::types::*;
-
+    use resource_providers::core::IdProductionError;
+    use tower::util::BoxService;
+    use tower::{service_fn, ServiceBuilder, ServiceExt};
     use wasmtime::component::{Component, Linker};
     use wasmtime::{Config, Engine, Store};
     use wasmtime_wasi::preview2::{
         command::add_to_linker, Table, WasiCtx, WasiCtxBuilder, WasiView,
     };
+    use resource_providers::http::{HostClientResourceMaker, HostClientResource};
+
 
     impl WasiView for ServerWasiView {
         fn table(&self) -> &Table {
@@ -300,6 +307,7 @@ mod test {
     pub(crate) struct ServerWasiView {
         pub(crate) table: Table,
         pub(crate) ctx: WasiCtx,
+        pub(crate) host_client_resource: HostClientResource
     }
 
     impl ServerWasiView {
@@ -310,7 +318,29 @@ mod test {
                 .build(&mut table)
                 .unwrap();
 
-            Self { table, ctx }
+            async fn service_fn(v: ()) -> Result<u32, IdProductionError> {
+                Ok(100u32)
+            }
+
+            // This would be reused by multiple resources
+            let resource_id_provider = ServiceBuilder::new().service_fn(service_fn).boxed();
+
+            // An instance of an actual maker
+            let http_client_maker = resource_providers::providers::http_client_hyper::new_client_maker();
+
+            // Our resource with the actual maker and id provider
+            let host_client_resource = HostClientResource::new(http_client_maker, resource_id_provider);
+            Self {
+                table,
+                ctx,
+                host_client_resource,
+            }
+        }
+    }
+
+    impl HostClientResourceMaker for ServerWasiView {
+        fn new(&mut self) -> anyhow::Result<&mut resource_providers::http::HostClientResource> {
+            Ok(&mut self.host_client_resource)
         }
     }
 
@@ -326,6 +356,13 @@ mod test {
         let mut store = Store::new(&engine, host_view);
 
         let _ = add_to_linker(&mut linker)?;
+
+        let _ = resource_providers::http::setup_with_wasmtime(
+            &mut store,
+            &test_function_component,
+            &mut linker,
+        )
+        .await?;
 
         let (bindings, _instance) =
             FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker).await?;
