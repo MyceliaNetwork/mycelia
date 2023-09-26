@@ -30,7 +30,7 @@ pub enum ServerState {
 
 #[derive(Error, Debug)]
 pub enum ServerError {
-    #[error("development_server error")]
+    #[error("development_server error. Cause: {cause:?}")]
     ServerError { cause: String },
 }
 
@@ -40,7 +40,7 @@ pub enum PollError {
     NotStarted,
     #[error("already started")]
     Started,
-    #[error("development_server error")]
+    #[error("development_server error. Cause: {cause:?}")]
     ServerError { cause: String },
     #[error("timeout")]
     Timeout,
