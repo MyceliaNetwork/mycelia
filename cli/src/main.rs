@@ -308,11 +308,11 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
 
     return tokio::select! {
         // Wait for the handlers to exit. Currently this will never happen
-        wait = wait => trace!("wait {:?}", wait),
+        wait = wait => trace!("wait {:#?}", wait),
         task_handle = task_handle => {
             match task_handle {
                 Ok(_) => std::process::exit(-1),
-                Err(e) => error!("task_handle error {:?}", e)
+                Err(e) => error!("task_handle error {:#?}", e)
             }
         }
     };
@@ -370,7 +370,7 @@ async fn setup_listeners(
             match reader.next_line().await {
                 Ok(Some(string)) => trace!("handle_stdout: {}", string),
                 Ok(None) => trace!("handle_stdout: None"),
-                Err(e) => trace!("handle_stdout: {:?}", e),
+                Err(e) => trace!("handle_stdout: {:#?}", e),
             }
         }
     });
@@ -381,15 +381,15 @@ async fn setup_listeners(
             match reader.next_line().await {
                 Ok(Some(string)) => info!("handle_stderr: {}", string),
                 Ok(None) => trace!("handle_stderr: None"),
-                Err(e) => info!("handle_stderr: {:?}", e),
+                Err(e) => info!("handle_stderr: {:#?}", e),
             }
         }
     });
     // Wait for a handler to exit. You already spawned the handlers, you don't need to spawn them again.
     // I'm using select instead of join so we can see any errors immediately.
     tokio::select! {
-        recv = handle_stdout => info!("recv: {:?}", recv),
-        send = handle_stderr => info!("send: {:?}", send),
+        recv = handle_stdout => info!("recv: {:#?}", recv),
+        send = handle_stderr => info!("send: {:#?}", send),
     };
 }
 
@@ -409,8 +409,8 @@ async fn start(
             true => start_background(http_port, rpc_port).await,
         },
         Err(err) => {
-            error!("Listening Error: {:?}", err);
-            return Err(format!("Server error: {:?}", err).into());
+            error!("Listening Error: {:#?}", err);
+            return Err(format!("Server error: {:#?}", err).into());
         }
     }
 
@@ -532,7 +532,7 @@ async fn try_deploy(
                             info!("Deployed component to path: {}", path);
                             return Ok(());
                         } else {
-                            error!("Error deploying component. Error: {:?}", message);
+                            error!("Error deploying component. Error: {:#?}", message);
                             return Err("Error deploying component. Error".into());
                         }
                     }
@@ -542,7 +542,7 @@ async fn try_deploy(
                 if server_state.unwrap() == ServerState::NotStarted {
                     try_stop(domain, rpc_port).await?;
                 }
-                return Err(format!("Deployment Error: {:?}", err).into());
+                return Err(format!("Deployment Error: {:#?}", err).into());
             }
         }
     }
