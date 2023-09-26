@@ -262,6 +262,8 @@ pub mod service {
 
 #[cfg(test)]
 mod test {
+    use std::time::Instant;
+
     // TODO need to inject the mycelia http client provider codes here
     use super::types::*;
     use resource_providers::core::IdProductionError;
@@ -367,19 +369,24 @@ mod test {
         let (bindings, _instance) =
             FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker).await?;
 
-        let should_echo = HttpRequest {
-            method: Method::Get,
-            headers: vec![],
-            body: vec![2, 4, 6],
-            uri: "foo".into(),
-        };
+        let now = Instant::now();
+        for _ in 0..10 {
+            let should_echo = HttpRequest {
+                method: Method::Get,
+                headers: vec![],
+                body: vec![2, 4, 6],
+                uri: "foo".into(),
+            };
 
-        let result: HttpResponse = bindings
-            .call_handle_request(&mut store, &should_echo)
-            .await?;
+            let result: HttpResponse = bindings
+                .call_handle_request(&mut store, &should_echo)
+                .await?;
 
-        assert_eq!(result.status, 200u16);
-        assert_eq!(result.body, vec![2, 4, 6]);
+            assert_eq!(result.status, 200u16);
+            assert_eq!(result.body, vec![2, 4, 6]);
+        }
+
+        println!("{:#?}", now.elapsed());
         Ok(())
     }
 }

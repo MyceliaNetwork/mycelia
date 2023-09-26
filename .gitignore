@@ -26,3 +26,6 @@ env
 grf.yml
 expanded.rs
 **/deps/**
+
+# Node
+node_modules/
