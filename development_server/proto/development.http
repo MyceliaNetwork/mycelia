@@ -1,6 +1,0 @@
-proto < ./development.proto
-
-GRPC localhost:50051/development.Development/deploy_component
-{
-  "component_path" : "./components/function-component.wasm"
-}
