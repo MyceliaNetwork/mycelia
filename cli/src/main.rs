@@ -67,10 +67,10 @@ enum Commands {
     Build,
     /// Start the Mycelia development server
     Start {
-        /// The domain to listen on.
-        /// Default: localhost
+        /// The ip to listen on.
+        /// Default: 127.0.0.1
         #[clap(short, long, default_value = "127.0.0.1")]
-        domain: String,
+        ip: String,
 
         /// The port http server should bind to.
         /// Default: 3001
@@ -96,10 +96,10 @@ enum Commands {
     },
     /// Stop the Mycelia development server
     Stop {
-        /// The domain to listen on.
-        /// Default: localhost
+        /// The ip to listen on.
+        /// Default: 127.0.0.1
         #[clap(short, long, default_value = "127.0.0.1")]
-        domain: String,
+        ip: String,
 
         /// The port rpc server should bind to
         /// Default: 50051
@@ -112,10 +112,10 @@ enum Commands {
         #[clap(long)]
         component: String,
 
-        /// The domain to listen on.
+        /// The ip to listen on.
         /// Default: localhost
         #[clap(short, long, default_value = "127.0.0.1")]
-        domain: String,
+        ip: String,
 
         /// The port http server should bind to.
         /// Default: 3001
@@ -154,24 +154,24 @@ async fn try_main() -> Result<(), DynError> {
             build()?;
         }
         Commands::Start {
-            domain,
+            ip,
             http_port,
             rpc_port,
             open_browser,
             background,
         } => {
-            let _ = start(domain, http_port, rpc_port, open_browser, background).await;
+            let _ = start(ip, http_port, rpc_port, open_browser, background).await;
         }
-        Commands::Stop { domain, rpc_port } => {
-            let _ = stop(domain, rpc_port).await;
+        Commands::Stop { ip, rpc_port } => {
+            let _ = stop(ip, rpc_port).await;
         }
         Commands::Deploy {
-            domain,
+            ip,
             http_port,
             rpc_port,
             component,
         } => {
-            let _ = deploy(domain, http_port, rpc_port, component).await;
+            let _ = deploy(ip, http_port, rpc_port, component).await;
         }
     }
 
@@ -240,7 +240,7 @@ async fn server_state(address: String, just_started: &bool) -> Result<ServerStat
 }
 
 async fn poll_server_state(
-    domain: &str,
+    ip: &str,
     rpc_port: &u16,
     just_started: &bool,
 ) -> Result<ServerState, PollError> {
@@ -248,7 +248,7 @@ async fn poll_server_state(
     let timeout = Duration::from_secs(10);
 
     loop {
-        let rpc_addr = format!("http://{}:{}", domain, rpc_port);
+        let rpc_addr = format!("http://{}:{}", ip, rpc_port);
         let state = server_state(rpc_addr, just_started).await;
 
         match state {
@@ -268,9 +268,9 @@ async fn poll_server_state(
     }
 }
 
-async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
-    let http_addr = format!("http://{}:{}", domain, http_port);
-    let rpc_addr = format!("http://{}:{}", domain, rpc_port);
+async fn spawn_client(ip: &str, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
+    let http_addr = format!("http://{}:{}", ip, http_port);
+    let rpc_addr = format!("http://{}:{}", ip, rpc_port);
     let (mut client, wait) = start_development_server(http_port, rpc_port);
 
     // Spin off child process to make sure it can make process on its own
@@ -295,7 +295,7 @@ async fn spawn_client(domain: &str, http_port: &u16, rpc_port: &u16, open_browse
     debug!("RPC server listening on {}", rpc_addr);
 
     if *open_browser {
-        let server_state = poll_server_state(domain, rpc_port, &true).await;
+        let server_state = poll_server_state(ip, rpc_port, &true).await;
         if server_state.is_ok_and(|s| s == ServerState::Started) {
             match open::that(&http_addr) {
                 Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
@@ -394,18 +394,18 @@ async fn setup_listeners(
 }
 
 async fn start(
-    domain: &String,
+    ip: &String,
     http_port: &u16,
     rpc_port: &u16,
     open_browser: &bool,
     background: &bool,
 ) -> Result<(), DynError> {
     info!("Starting development server");
-    let rpc_addr = format!("http://{}:{}", domain, rpc_port);
+    let rpc_addr = format!("http://{}:{}", ip, rpc_port);
 
     match server_state(rpc_addr, &false).await {
         Ok(_) => match *background {
-            false => spawn_client(domain, http_port, rpc_port, open_browser).await,
+            false => spawn_client(ip, http_port, rpc_port, open_browser).await,
             true => start_background(http_port, rpc_port).await,
         },
         Err(err) => {
@@ -435,8 +435,8 @@ async fn start_background(http_port: &u16, rpc_port: &u16) {
         .expect("Unable to spawn development_server");
 }
 
-async fn stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
-    if let Err(e) = try_stop(domain, rpc_port).await {
+async fn stop(ip: &str, rpc_port: &u16) -> Result<(), DynError> {
+    if let Err(e) = try_stop(ip, rpc_port).await {
         error!("{}", e);
 
         std::process::exit(-1);
@@ -445,9 +445,9 @@ async fn stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
     Ok(())
 }
 
-async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
+async fn try_stop(ip: &str, rpc_port: &u16) -> Result<(), DynError> {
     info!("Stopping development server");
-    let address = format!("http://{}:{}", domain, rpc_port);
+    let address = format!("http://{}:{}", ip, rpc_port);
     let client = DevelopmentClient::connect(address.clone()).await;
     match client {
         Ok(mut client) => {
@@ -480,12 +480,12 @@ async fn try_stop(domain: &str, rpc_port: &u16) -> Result<(), DynError> {
  * This will take the file "./components/game.wasm" and deploy it.
  */
 async fn deploy(
-    domain: &String,
+    ip: &String,
     http_port: &u16,
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    if let Err(e) = try_deploy(domain, http_port, rpc_port, component).await {
+    if let Err(e) = try_deploy(ip, http_port, rpc_port, component).await {
         error!("{}", e);
 
         std::process::exit(-1);
@@ -495,22 +495,22 @@ async fn deploy(
 }
 
 async fn try_deploy(
-    domain: &String,
+    ip: &String,
     http_port: &u16,
     rpc_port: &u16,
     component: &String,
 ) -> Result<(), DynError> {
-    let server_state = poll_server_state(domain, rpc_port, &false).await;
+    let server_state = poll_server_state(ip, rpc_port, &false).await;
     if server_state
         .as_ref()
         .is_ok_and(|s| s == &ServerState::NotStarted)
     {
-        let _ = start(domain, http_port, rpc_port, &false, &true).await;
-        let _ = poll_server_state(domain, rpc_port, &true).await;
+        let _ = start(ip, http_port, rpc_port, &false, &true).await;
+        let _ = poll_server_state(ip, rpc_port, &true).await;
     };
 
     if server_state.is_ok() {
-        let address = format!("http://{}:{}", domain, rpc_port);
+        let address = format!("http://{}:{}", ip, rpc_port);
         let path = format!("./components/{}.wasm", component);
         let client = DevelopmentClient::connect(address.clone()).await;
         match client {
@@ -526,7 +526,7 @@ async fn try_deploy(
                 match response.into_inner() {
                     DeployReply { message } => {
                         if server_state.unwrap() == ServerState::NotStarted {
-                            try_stop(domain, rpc_port).await?;
+                            try_stop(ip, rpc_port).await?;
                         }
                         if message == "Ok".to_string() {
                             info!("Deployed component to path: {}", path);
@@ -540,7 +540,7 @@ async fn try_deploy(
             }
             Err(err) => {
                 if server_state.unwrap() == ServerState::NotStarted {
-                    try_stop(domain, rpc_port).await?;
+                    try_stop(ip, rpc_port).await?;
                 }
                 return Err(format!("Deployment Error: {:#?}", err).into());
             }
