@@ -8,6 +8,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .compile(&["../protos/proto/development.proto"], &["../protos/proto"])
         .unwrap();
 
-    tonic_build::compile_protos("../protos/proto/development.proto")?;
+    tonic_build::compile_protos("proto/development.proto")?;
     Ok(())
 }

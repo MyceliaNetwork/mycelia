@@ -1,15 +1,14 @@
 syntax = "proto3";
 package development;
 
-service Development {
+service Development{
   rpc Echo(EchoRequest) returns (EchoReply) {};
   rpc DeployComponent(DeployRequest) returns (DeployReply) {};
   rpc StopServer(Empty) returns (Empty);
 }
 
-message Empty {
+message Empty {}
 
-}
 
 message DeployRequest {
   string component_path = 1;

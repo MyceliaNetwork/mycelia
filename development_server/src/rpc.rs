@@ -45,9 +45,10 @@ impl Development for RpcServer {
         &self,
         request: tonic::Request<EchoRequest>,
     ) -> Result<tonic::Response<EchoReply>, tonic::Status> {
-        Ok(tonic::Response::new(EchoReply {
-            message: request.into_inner().message,
-        }))
+        let message = request.into_inner().message;
+        info!("Received Echo. message: {:?}", message);
+
+        Ok(tonic::Response::new(EchoReply { message }))
     }
 
     async fn deploy_component(
@@ -57,7 +58,6 @@ impl Development for RpcServer {
         info!("received deploy_component cmd");
         let request = request.into_inner();
         let component_path = request.component_path;
-
         let (reply, rx) = oneshot::channel();
         let cmd = ServiceCommand::SwapFunctionComponent {
             component_path,
@@ -99,7 +99,7 @@ pub(crate) async fn start_rpc_server(command_sink: ServiceCommandSink, socket_ad
 
     let server = RpcServer::new(command_sink);
     let server = protos::development_server::DevelopmentServer::new(server);
-
+    info!("preparing to start rpc server");
     let _server = tonic::transport::Server::builder()
         .add_service(reflection)
         .add_service(server)

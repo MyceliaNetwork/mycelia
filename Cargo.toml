@@ -1,8 +1,8 @@
 [workspace]
-
 members = [
   # Tooling
   "xtask",
+  "protos",
   "cli",
   "development_server",
   "wasmtime_components",

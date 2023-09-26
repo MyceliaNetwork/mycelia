@@ -5,10 +5,36 @@ Open Source Application Stack &amp; PaaS
 ## Installation
 
 ```sh
-cargo xtask build
+cargo run build
 ```
 
-NOTE: We opted for [cargo-xtask](https://github.com/matklad/cargo-xtask) because Cargo build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
+**IMPORTANT**: `cargo build` will fail because we have to use [cargo-xtask](https://github.com/matklad/cargo-xtask/) to build the ./components/ folder before building the project. Reason: Cargo's build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
+
+## CLI
+
+### Info
+
+```sh
+cargo run
+```
+
+### Start Development Server
+
+```sh
+cargo run start
+```
+
+### Stop Development Server
+
+```sh
+cargo run stop
+```
+
+### Deploy
+
+```sh
+cargo run deploy --component="your_component_name"
+```
 
 ## Development Server
 
@@ -16,9 +42,22 @@ NOTE: We opted for [cargo-xtask](https://github.com/matklad/cargo-xtask) because
 RUST_LOG=info cargo run --package development_server
 ```
 
-### Logging
+## Logging
 
 We use [env_logger](https://docs.rs/env_logger/0.10.0/env_logger/) for logging. Please see their documentation for more information on setting custom log levels, filtering, and more.
+
+Default CLI log level is `info`.
+
+Basic example usage:
+
+```sh
+RUST_LOG=error cargo run start
+RUST_LOG=warn cargo run start
+RUST_LOG=debug cargo run start
+RUST_LOG=info cargo run start # default
+RUST_LOG=trace cargo run start
+```
+
 ## Community & Contributing & Help
 
 Come join our [Discord](https://discord.gg/hKMtmdMJ)
