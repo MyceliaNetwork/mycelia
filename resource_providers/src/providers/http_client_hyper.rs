@@ -14,8 +14,7 @@ use hyper::{body::HttpBody, Body, Method, Request};
 use tower::{util::BoxService, Service, ServiceBuilder, ServiceExt};
 
 use crate::http::{
-    ClientRequest, ClientResponse, ClientResult, HostClientMaker, HostClientResource,
-    HostClientResourceMaker, HttpClientError,
+    ClientRequest, ClientResponse, ClientResult, HostClientMaker, HttpClientError,
 };
 
 

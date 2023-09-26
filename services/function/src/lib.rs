@@ -262,6 +262,8 @@ pub mod service {
 
 #[cfg(test)]
 mod test {
+    use std::time::Instant;
+
     // TODO need to inject the mycelia http client provider codes here
     use super::types::*;
     use resource_providers::core::IdProductionError;
@@ -380,6 +382,7 @@ mod test {
 
         assert_eq!(result.status, 200u16);
         assert_eq!(result.body, vec![2, 4, 6]);
+
         Ok(())
     }
 }
