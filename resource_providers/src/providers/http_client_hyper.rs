@@ -48,7 +48,7 @@ impl Service<ClientRequest> for HyperHostClient {
         // TODO creating a new client for each request for now
         // in the future we should Arc<Mutex<Client>>
         // and implement poll correctly
-        let client = hyper::Client::new();
+        let _client = hyper::Client::new();
         let https = hyper_tls::HttpsConnector::new();
         let client = hyper::Client::builder().build(https);
 

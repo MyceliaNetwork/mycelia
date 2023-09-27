@@ -22,28 +22,10 @@ use development::development_client::DevelopmentClient;
 use development::{DeployReply, DeployRequest, EchoReply, EchoRequest, Empty};
 
 #[derive(PartialEq)]
-pub enum ServerState {
+enum ServerState {
     NotStarted,
     StartingUp,
     Started,
-}
-
-#[derive(Error, Debug)]
-pub enum ServerError {
-    #[error("development_server error. Cause: {cause:?}")]
-    ServerError { cause: String },
-}
-
-#[derive(Debug, Error)]
-pub enum PollError {
-    #[error("not yet started")]
-    NotStarted,
-    #[error("already started")]
-    Started,
-    #[error("development_server error. Cause: {cause:?}")]
-    ServerError { cause: String },
-    #[error("timeout")]
-    Timeout,
 }
 
 type DynError = Box<dyn Error>;
@@ -197,6 +179,12 @@ Status code: {}",
     Ok(())
 }
 
+#[derive(Error, Debug)]
+enum ServerError {
+    #[error("development_server error. Cause: {cause:?}")]
+    ServerError { cause: String },
+}
+
 // We use the tonic crate to send an EchoRequest to the development_server through a gRPC address
 // The `just_started` argument is used to return ServerState::StartingUp in stead of
 // ServerState::NotStarted when "transport error" is returned by the gRPC client.
@@ -237,6 +225,14 @@ async fn server_state(address: String, just_started: &bool) -> Result<ServerStat
             }
         },
     };
+}
+
+#[derive(Debug, Error)]
+enum PollError {
+    #[error("development_server error. Cause: {cause:?}")]
+    ServerError { cause: String },
+    #[error("timeout")]
+    Timeout,
 }
 
 async fn poll_server_state(
@@ -494,12 +490,32 @@ async fn deploy(
     Ok(())
 }
 
+#[derive(Debug, Error)]
+enum DeploymentError {
+    #[error("path for component '{component:?}' not found. Path: {path:?}")]
+    PathNotFound { component: String, path: String },
+    #[error("client error. Cause: {cause:?}")]
+    ClientError { cause: String },
+    #[error("deployment error. Cause: {cause:?}")]
+    DeploymentError { cause: String },
+    #[error("server error")]
+    ServerError,
+}
+
 async fn try_deploy(
     ip: &String,
     http_port: &u16,
     rpc_port: &u16,
     component: &String,
-) -> Result<(), DynError> {
+) -> Result<(), DeploymentError> {
+    let path = project_root().join(format!("components/{}.wasm", component));
+    if !path.exists() {
+        return Err(DeploymentError::PathNotFound {
+            component: component.clone(),
+            path: path.clone().display().to_string(),
+        });
+    }
+
     let server_state = poll_server_state(ip, rpc_port, &false).await;
     if server_state
         .as_ref()
@@ -511,12 +527,11 @@ async fn try_deploy(
 
     if server_state.is_ok() {
         let address = format!("http://{}:{}", ip, rpc_port);
-        let path = format!("./components/{}.wasm", component);
         let client = DevelopmentClient::connect(address.clone()).await;
         match client {
             Ok(mut client) => {
                 let message = DeployRequest {
-                    component_path: path.clone(),
+                    component_path: path.clone().display().to_string(),
                 };
                 let request = tonic::Request::new(message);
                 let response = client
@@ -526,28 +541,29 @@ async fn try_deploy(
                 match response.into_inner() {
                     DeployReply { message } => {
                         if server_state.unwrap() == ServerState::NotStarted {
-                            try_stop(ip, rpc_port).await?;
+                            let _ = try_stop(ip, rpc_port).await;
                         }
                         if message == "Ok".to_string() {
-                            info!("Deployed component to path: {}", path);
+                            info!("Deployed component to path: {}", path.display());
                             return Ok(());
                         } else {
-                            error!("Error deploying component. Error: {:#?}", message);
-                            return Err("Error deploying component. Error".into());
+                            return Err(DeploymentError::DeploymentError { cause: message });
                         }
                     }
                 };
             }
             Err(err) => {
                 if server_state.unwrap() == ServerState::NotStarted {
-                    try_stop(ip, rpc_port).await?;
+                    let _ = try_stop(ip, rpc_port).await;
                 }
-                return Err(format!("Deployment Error: {:#?}", err).into());
+                return Err(DeploymentError::ClientError {
+                    cause: err.to_string(),
+                });
             }
         }
     }
 
-    return Err("Deployment Error: Server not yet started".into());
+    return Err(DeploymentError::ServerError);
 }
 
 fn project_root() -> PathBuf {
