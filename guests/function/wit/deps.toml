@@ -1,2 +1,2 @@
 preview = "https://gitpkg.now.sh/bytecodealliance/wasmtime/crates/wasi?e250334b8ebfba9359802ab7f61bdd7c6085d87a"
-# mycelia = "../../../mycelia_http/wit" this can be uncommented once we're actually providing something in this dep
+mycelia = "../../../guest_crates/mycelia_http/wit"

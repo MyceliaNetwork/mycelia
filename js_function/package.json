@@ -1,0 +1,10 @@
+{
+  "type" : "module",
+  "dependencies": {
+    "@bytecodealliance/componentize-js": "^0.3.0",
+    "@bytecodealliance/jco": "^0.12.1"
+  },
+  "scripts": {
+    "build": "node componentize.js"
+  }
+}

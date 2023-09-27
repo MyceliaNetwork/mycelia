@@ -48,6 +48,7 @@ interface types {
 
 world function-world {
   use types.{http-request, http-response}
+  import mycelia-alpha:http/interfaces
   export handle-request: func(req: http-request) -> http-response
 }
 
