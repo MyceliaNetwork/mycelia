@@ -21,11 +21,51 @@ pub mod development {
 use development::development_client::DevelopmentClient;
 use development::{DeployReply, DeployRequest, EchoReply, EchoRequest, Empty};
 
+#[derive(Debug, Error)]
+enum StartError {
+    #[error("server error. Cause: {cause:?}")]
+    ServerError { cause: String },
+}
+
+#[derive(Debug, Error)]
+enum StopError {
+    #[error("client error. Cause: {cause:?}")]
+    ClientError { cause: String },
+    #[error("client method error. Cause: {cause:?}")]
+    MethodError { cause: String },
+}
+
 #[derive(PartialEq)]
 enum ServerState {
     NotStarted,
     StartingUp,
     Started,
+}
+
+#[derive(Error, Debug)]
+enum ServerError {
+    #[error("development_server error. Cause: {cause:?}")]
+    ServerError { cause: String },
+}
+
+#[derive(Debug, Error)]
+enum PollError {
+    #[error("development_server error. Cause: {cause:?}")]
+    ServerError { cause: String },
+    #[error("timeout")]
+    Timeout,
+}
+
+#[derive(Debug, Error)]
+enum DeploymentError {
+    #[error("path for component '{component:?}' not found. Path: {path:?}")]
+    PathNotFound { component: String, path: String },
+    #[error("client error. Cause: {cause:?}")]
+    ClientError { cause: String },
+    #[error("deployment error. Cause: {cause:?}")]
+    DeploymentError { cause: String },
+    #[error("server error")]
+    ServerError,
 }
 
 type DynError = Box<dyn Error>;
@@ -142,7 +182,7 @@ async fn try_main() -> Result<(), DynError> {
             open_browser,
             background,
         } => {
-            let _ = start(ip, http_port, rpc_port, open_browser, background).await;
+            start(ip, http_port, rpc_port, open_browser, background).await;
         }
         Commands::Stop { ip, rpc_port } => {
             stop(ip, rpc_port).await;
@@ -177,12 +217,6 @@ Status code: {}",
     }
 
     Ok(())
-}
-
-#[derive(Error, Debug)]
-enum ServerError {
-    #[error("development_server error. Cause: {cause:?}")]
-    ServerError { cause: String },
 }
 
 // We use the tonic crate to send an EchoRequest to the development_server through a gRPC address
@@ -225,14 +259,6 @@ async fn server_state(address: String, just_started: &bool) -> Result<ServerStat
             }
         },
     };
-}
-
-#[derive(Debug, Error)]
-enum PollError {
-    #[error("development_server error. Cause: {cause:?}")]
-    ServerError { cause: String },
-    #[error("timeout")]
-    Timeout,
 }
 
 async fn poll_server_state(
@@ -395,7 +421,21 @@ async fn start(
     rpc_port: &u16,
     open_browser: &bool,
     background: &bool,
-) -> Result<(), DynError> {
+) {
+    if let Err(e) = try_start(ip, http_port, rpc_port, open_browser, background).await {
+        error!("{}", e);
+
+        std::process::exit(-1);
+    }
+}
+
+async fn try_start(
+    ip: &String,
+    http_port: &u16,
+    rpc_port: &u16,
+    open_browser: &bool,
+    background: &bool,
+) -> Result<(), StartError> {
     info!("Starting development server");
     let rpc_addr = format!("http://{}:{}", ip, rpc_port);
 
@@ -405,8 +445,9 @@ async fn start(
             true => start_background(http_port, rpc_port).await,
         },
         Err(err) => {
-            error!("Listening Error: {:#?}", err);
-            return Err(format!("Server error: {:#?}", err).into());
+            return Err(StartError::ServerError {
+                cause: err.to_string(),
+            });
         }
     }
 
@@ -429,14 +470,6 @@ async fn start_background(http_port: &u16, rpc_port: &u16) {
         .stdout(Stdio::null())
         .spawn()
         .expect("Unable to spawn development_server");
-}
-
-#[derive(Debug, Error)]
-enum StopError {
-    #[error("client error. Cause: {cause:?}")]
-    ClientError { cause: String },
-    #[error("client method error. Cause: {cause:?}")]
-    MethodError { cause: String },
 }
 
 async fn stop(ip: &str, rpc_port: &u16) {
@@ -495,18 +528,6 @@ async fn deploy(ip: &String, http_port: &u16, rpc_port: &u16, component: &String
 
         std::process::exit(-1);
     }
-}
-
-#[derive(Debug, Error)]
-enum DeploymentError {
-    #[error("path for component '{component:?}' not found. Path: {path:?}")]
-    PathNotFound { component: String, path: String },
-    #[error("client error. Cause: {cause:?}")]
-    ClientError { cause: String },
-    #[error("deployment error. Cause: {cause:?}")]
-    DeploymentError { cause: String },
-    #[error("server error")]
-    ServerError,
 }
 
 async fn try_deploy(
