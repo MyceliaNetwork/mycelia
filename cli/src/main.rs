@@ -496,7 +496,7 @@ async fn try_new() -> Result<(), DynError> {
 
     copy_dir_all(mycelia_app_assets_target(), deployable_target())?;
 
-    let npm = env::var("NPM").unwrap_or_else(|_| "npm".to_string());
+    let npm = env::var("PNPM").unwrap_or_else(|_| "pnpm".to_string());
 
     // TODO run `npx create-next-app@latest` with some prompted values like
     // (name, use ts, eslint, tw, etc) in stead
