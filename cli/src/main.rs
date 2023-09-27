@@ -4,7 +4,9 @@ use log::{debug, error, info, trace, warn};
 use std::{
     env,
     error::Error,
+    fs,
     future::Future,
+    io,
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -116,6 +118,8 @@ enum Commands {
         #[clap(short, long, default_value = "false")]
         background: bool,
     },
+    /// Start a new boilerplate Mycelia project
+    New,
     /// Stop the Mycelia development server
     Stop {
         /// The ip to listen on.
@@ -183,6 +187,9 @@ async fn try_main() -> Result<(), DynError> {
             background,
         } => {
             start(ip, http_port, rpc_port, open_browser, background).await;
+        }
+        Commands::New => {
+            let _ = new().await;
         }
         Commands::Stop { ip, rpc_port } => {
             stop(ip, rpc_port).await;
@@ -472,6 +479,48 @@ async fn start_background(http_port: &u16, rpc_port: &u16) {
         .expect("Unable to spawn development_server");
 }
 
+async fn new() -> Result<(), DynError> {
+    if let Err(e) = try_new().await {
+        error!("{}", e);
+
+        std::process::exit(-1);
+    }
+
+    return Ok(());
+}
+
+async fn try_new() -> Result<(), DynError> {
+    info!("Creating new Mycelia project");
+
+    fs::create_dir_all(&deployable_target())?;
+
+    copy_dir_all(mycelia_app_assets_target(), deployable_target())?;
+
+    let npm = env::var("NPM").unwrap_or_else(|_| "npm".to_string());
+
+    // TODO run `npx create-next-app@latest` with some prompted values like
+    // (name, use ts, eslint, tw, etc) in stead
+    // TODO: see if you can use the App Router in stead
+
+    let status = std::process::Command::new(npm)
+        .current_dir(deployable_target())
+        .args(&["install"])
+        .status()?;
+
+    if !status.success() {
+        return Err(format!(
+            "`npm init` failed.
+
+Status code: {}",
+            status
+                .code()
+                .expect("Initializing new Mycelia project failed: no status")
+        ))?;
+    }
+
+    return Ok(());
+}
+
 async fn stop(ip: &str, rpc_port: &u16) {
     if let Err(e) = try_stop(ip, rpc_port).await {
         error!("{}", e);
@@ -594,10 +643,32 @@ async fn try_deploy(
     return Err(DeploymentError::ServerError);
 }
 
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
 fn project_root() -> PathBuf {
     Path::new(&env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(1)
         .expect("CARGO_MANIFEST_DIR not found")
         .to_path_buf()
+}
+
+fn deployable_target() -> PathBuf {
+    project_root().join("deployable")
+}
+
+fn mycelia_app_assets_target() -> PathBuf {
+    project_root().join("cli/static/mycelia-app")
 }
