@@ -145,7 +145,7 @@ async fn try_main() -> Result<(), DynError> {
             let _ = start(ip, http_port, rpc_port, open_browser, background).await;
         }
         Commands::Stop { ip, rpc_port } => {
-            let _ = stop(ip, rpc_port).await;
+            stop(ip, rpc_port).await;
         }
         Commands::Deploy {
             ip,
@@ -153,7 +153,7 @@ async fn try_main() -> Result<(), DynError> {
             rpc_port,
             component,
         } => {
-            let _ = deploy(ip, http_port, rpc_port, component).await;
+            deploy(ip, http_port, rpc_port, component).await;
         }
     }
 
@@ -431,27 +431,41 @@ async fn start_background(http_port: &u16, rpc_port: &u16) {
         .expect("Unable to spawn development_server");
 }
 
-async fn stop(ip: &str, rpc_port: &u16) -> Result<(), DynError> {
+#[derive(Debug, Error)]
+enum StopError {
+    #[error("client error. Cause: {cause:?}")]
+    ClientError { cause: String },
+    #[error("client method error. Cause: {cause:?}")]
+    MethodError { cause: String },
+}
+
+async fn stop(ip: &str, rpc_port: &u16) {
     if let Err(e) = try_stop(ip, rpc_port).await {
         error!("{}", e);
 
         std::process::exit(-1);
     }
-
-    Ok(())
 }
 
-async fn try_stop(ip: &str, rpc_port: &u16) -> Result<(), DynError> {
+async fn try_stop(ip: &str, rpc_port: &u16) -> Result<(), StopError> {
     info!("Stopping development server");
     let address = format!("http://{}:{}", ip, rpc_port);
     let client = DevelopmentClient::connect(address.clone()).await;
     match client {
         Ok(mut client) => {
             let request = tonic::Request::new(Empty {});
-            let response = client.stop_server(request).await?;
+            let response = client.stop_server(request).await;
+            if response.is_err() {
+                return Err(StopError::MethodError {
+                    cause: response.unwrap_err().to_string(),
+                });
+            }
 
-            match response.into_inner() {
-                Empty {} => warn!("Stopped development server"),
+            match response.unwrap().into_inner() {
+                Empty {} => {
+                    warn!("Stopped development server");
+                    return Ok(());
+                }
             }
         }
         Err(err) => {
@@ -460,12 +474,12 @@ async fn try_stop(ip: &str, rpc_port: &u16) -> Result<(), DynError> {
                     warn!("Server not yet started");
                     return Ok(());
                 }
-                err => *Box::new(Err(err.into())),
+                err => Err(StopError::ClientError {
+                    cause: err.to_string(),
+                }),
             };
         }
     };
-
-    Ok(())
 }
 
 /*
@@ -475,19 +489,12 @@ async fn try_stop(ip: &str, rpc_port: &u16) -> Result<(), DynError> {
  *
  * This will take the file "./components/game.wasm" and deploy it.
  */
-async fn deploy(
-    ip: &String,
-    http_port: &u16,
-    rpc_port: &u16,
-    component: &String,
-) -> Result<(), DynError> {
+async fn deploy(ip: &String, http_port: &u16, rpc_port: &u16, component: &String) {
     if let Err(e) = try_deploy(ip, http_port, rpc_port, component).await {
         error!("{}", e);
 
         std::process::exit(-1);
     }
-
-    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -541,7 +548,7 @@ async fn try_deploy(
                 match response.into_inner() {
                     DeployReply { message } => {
                         if server_state.unwrap() == ServerState::NotStarted {
-                            let _ = try_stop(ip, rpc_port).await;
+                            stop(ip, rpc_port).await;
                         }
                         if message == "Ok".to_string() {
                             info!("Deployed component to path: {}", path.display());
@@ -554,7 +561,7 @@ async fn try_deploy(
             }
             Err(err) => {
                 if server_state.unwrap() == ServerState::NotStarted {
-                    let _ = try_stop(ip, rpc_port).await;
+                    stop(ip, rpc_port).await;
                 }
                 return Err(DeploymentError::ClientError {
                     cause: err.to_string(),
