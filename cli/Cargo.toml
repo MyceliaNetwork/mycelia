@@ -16,5 +16,19 @@ thiserror = "1.0.48"
 tokio = { version = "1.32.0", features = ["full"] }
 tonic = { version = "0.10.0" }
 
+development_server = { path = "../development_server" }
+mycelia_guest_function = { path = "../guests/function" }
+mycelia_http = { path = "../guest_crates/mycelia_http" }
+protos = { path = "../protos" }
+resource_providers = { path = "../resource_providers" }
+function_service = { path = "../services/function" }
+# wasm_components = { path = "../wasm_components" }
+xtask = { path = "../xtask" }
+
+
 [build-dependencies]
 tonic-build = "0.10.0"
+
+# [[bin]]
+# name = "mycelia"
+# path = "src/main.rs"

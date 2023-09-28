@@ -570,14 +570,21 @@ name = "cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "development_server",
  "env_logger",
+ "function_service",
  "log",
+ "mycelia_guest_function",
+ "mycelia_http",
  "open",
  "prost",
+ "protos",
+ "resource_providers",
  "thiserror",
  "tokio",
  "tonic",
  "tonic-build",
+ "xtask",
 ]
 
 [[package]]
@@ -2053,7 +2060,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "proto"
+name = "protos"
 version = "0.1.0"
 dependencies = [
  "tonic-build",
