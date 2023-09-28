@@ -8,7 +8,6 @@ mod bindgen {
     });
 }
 
-struct Test;
 pub mod types {
     pub type HttpRequest = crate::bindgen::mycelia::execution::types::HttpRequest;
     pub type HttpResponse = crate::bindgen::mycelia::execution::types::HttpResponse;
@@ -267,6 +266,7 @@ mod test {
     // TODO need to inject the mycelia http client provider codes here
     use super::types::*;
     use resource_providers::core::IdProductionError;
+    use resource_providers::http::{HostClientResource, HostClientResourceMaker};
     use tower::util::BoxService;
     use tower::{service_fn, ServiceBuilder, ServiceExt};
     use wasmtime::component::{Component, Linker};
@@ -274,8 +274,6 @@ mod test {
     use wasmtime_wasi::preview2::{
         command::add_to_linker, Table, WasiCtx, WasiCtxBuilder, WasiView,
     };
-    use resource_providers::http::{HostClientResourceMaker, HostClientResource};
-
 
     impl WasiView for ServerWasiView {
         fn table(&self) -> &Table {
@@ -309,7 +307,7 @@ mod test {
     pub(crate) struct ServerWasiView {
         pub(crate) table: Table,
         pub(crate) ctx: WasiCtx,
-        pub(crate) host_client_resource: HostClientResource
+        pub(crate) host_client_resource: HostClientResource,
     }
 
     impl ServerWasiView {
@@ -328,10 +326,12 @@ mod test {
             let resource_id_provider = ServiceBuilder::new().service_fn(service_fn).boxed();
 
             // An instance of an actual maker
-            let http_client_maker = resource_providers::providers::http_client_hyper::new_client_maker();
+            let http_client_maker =
+                resource_providers::providers::http_client_hyper::new_client_maker();
 
             // Our resource with the actual maker and id provider
-            let host_client_resource = HostClientResource::new(http_client_maker, resource_id_provider);
+            let host_client_resource =
+                HostClientResource::new(http_client_maker, resource_id_provider);
             Self {
                 table,
                 ctx,
