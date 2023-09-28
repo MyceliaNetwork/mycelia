@@ -1,0 +1,48 @@
+targets:
+  - platform: win32
+    arch: x64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.zip
+  - platform: linux
+    arch: x64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.tar.gz
+  - platform: darwin
+    arch: x64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.tar.gz
+  - platform: darwin
+    arch: x64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.tar.gz
+
+# provider: npm
+# both recon-root.json and recon-sub.json paths are relative to working folder
+npm:
+  publish: false # dont publish to npm, just generate the packages on disk
+  org: "@departurelabs"
+  name: mycelia
+  root:
+    name: mycelia
+    manifest: rustwrap/fixtures/config/mycelia-root.json
+    # readme: rustwrap/fixtures/config/README.md
+    readme: README.md
+  # sub:
+  #   manifest: rustwrap/fixtures/config/mycelia-sub.json
+  #   # readme: rustwrap/fixtures/config/README.md
+  #   readme: README.md
+#
+# provider: homebrew
+# brew:
+#   name: mycelia
+#   publish: false # push an update commit to the tap repo
+#   # tap: jondot/homebrew-tap
+#   recipe_fname: mycelia.rb
+#   recipe_template: |
+#     class mycelia < Formula
+#       desc "mycelia"
+#       homepage "http://www.mycelila.ooo"
+#       url "__URL__"
+#       version "__VERSION__"
+#       sha256 "__SHA__"
+
+#       def install
+#         bin.install "mycelia"
+#       end
+#     end

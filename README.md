@@ -58,6 +58,12 @@ RUST_LOG=info cargo run start # default
 RUST_LOG=trace cargo run start
 ```
 
+## Release
+
+```sh
+cargo run build --workspace --release
+```
+
 ## Community & Contributing & Help
 
 Come join our [Discord](https://discord.gg/hKMtmdMJ)
