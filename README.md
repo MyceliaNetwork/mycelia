@@ -60,8 +60,11 @@ RUST_LOG=trace cargo run start
 
 ## Release
 
+We use [rustwrap](https://github.com/rusty-ferris-club/rustwrap/tree/master) to publish our release binaries to npm and brew.
+
 ```sh
 cargo run build --workspace --release
+rustwrap --tag 0.1.0
 ```
 
 ## Community & Contributing & Help

@@ -20,13 +20,11 @@ npm:
   name: mycelia
   root:
     name: mycelia
-    manifest: rustwrap/fixtures/config/mycelia-root.json
-    # readme: rustwrap/fixtures/config/README.md
+    manifest: rustwrap/mycelia-root.json # NOTE: I have no idea why both root & sub are necessary
     readme: README.md
-  # sub:
-  #   manifest: rustwrap/fixtures/config/mycelia-sub.json
-  #   # readme: rustwrap/fixtures/config/README.md
-  #   readme: README.md
+  sub:
+    manifest: rustwrap/mycelia-sub.json # NOTE: I have no idea why both root & sub are necessary
+    readme: README.md
 #
 # provider: homebrew
 # brew:
