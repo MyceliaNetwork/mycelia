@@ -32,3 +32,6 @@ node_modules/
 
 # User project using `cargo run new`
 deployable/
+
+# Rustwrap
+dist/
