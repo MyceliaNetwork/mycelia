@@ -1,3 +1,4 @@
+use log::error;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -5,23 +6,29 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use version_compare::{compare_to, Cmp};
 
 type DynError = Box<dyn std::error::Error>;
 
-fn main() {
-    if let Err(e) = try_main() {
+#[tokio::main]
+async fn main() {
+    if let Err(e) = try_main().await {
         eprintln!("{}", e);
         std::process::exit(-1);
     }
 }
 
-fn try_main() -> Result<(), DynError> {
+async fn try_main() -> Result<(), DynError> {
     let task = env::args().nth(1);
+
+    println!("{:#?}", env::args());
+
     match task.as_deref() {
         Some("build") => build()?,
+        Some("release") => release().await?,
         _ => print_help(),
     }
-    Ok(())
+    return Ok(());
 }
 
 fn print_help() {
@@ -218,6 +225,66 @@ Status code: {}",
 
     Ok(())
 }
+
+async fn release() -> Result<(), DynError> {
+    if let Err(e) = try_release().await {
+        error!("{}", e);
+
+        std::process::exit(-1);
+    }
+    return Ok(());
+}
+
+async fn try_release() -> Result<(), DynError> {
+    let version_current: &str = env!("CARGO_PKG_VERSION");
+    println!(
+        "🪵 [main.rs:239]~ token ~ \x1b[0;32mversion_current\x1b[0m = {}",
+        version_current
+    );
+    let version_arg = env::args().nth(2).expect("Version argument is missing");
+
+    if compare_to(version_current, version_arg.clone(), Cmp::Gt).unwrap() {
+        return Err(format!(
+            "Version argument '{}' is lower than current version '{}'",
+            version_arg, version_current
+        ))?;
+    }
+
+    build_workspace_release().await?;
+    // rustwrap(version_arg).await?;
+
+    return Ok(());
+}
+
+async fn build_workspace_release() -> Result<(), DynError> {
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let status = Command::new(cargo)
+        .current_dir(project_root())
+        .args(&["build", "--workspace", "--release"])
+        .status()?;
+
+    if !status.success() {
+        // format!("`cargo build --workspace --release` failed.")
+        return Err("x".to_string().into());
+    }
+
+    return Ok(());
+}
+
+// fn rustwrap(version: &str) -> Result<(), DynError> {
+//     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
+
+//     let status = Command::new(rustwrap)
+//         .current_dir(project_root())
+//         .args(&[format("--tag {}", version)])
+//         .status()?;
+
+//     if !status.success() {
+//         return Err(format!("`rustwrap --tag {}", version_input));
+//     }
+
+//     return Ok(());
+// }
 
 fn project_root() -> PathBuf {
     Path::new(&env!("CARGO_MANIFEST_DIR"))

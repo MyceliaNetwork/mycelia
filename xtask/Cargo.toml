@@ -10,3 +10,8 @@ authors = ["Daniel Terwiel <dani+mycelia@departure.dev>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+dialoguer = "0.11.0"
+env_logger = { workspace = true }
+log = { workspace = true }
+tokio = { version = "1.32.0", features = ["full"] }
+version-compare = "0.1.1"
