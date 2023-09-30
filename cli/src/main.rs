@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
+use dialoguer::{theme::ColorfulTheme, Input};
 use log::{debug, error, info, trace, warn};
+use version_compare::{compare, compare_to, Cmp, Version};
 
 use std::{
     env,
@@ -68,6 +70,19 @@ enum DeploymentError {
     DeploymentError { cause: String },
     #[error("server error")]
     ServerError,
+}
+
+#[derive(Debug, Error)]
+enum ReleaseError {
+    #[error(
+        "incorrect version '{version_input:?}'. Must be higher than current: {version_current:?}"
+    )]
+    VersionIncorrect {
+        version_input: String,
+        version_current: String,
+    },
+    #[error("release error. Cause: {cause:?}")]
+    ReleaseError { cause: String },
 }
 
 type DynError = Box<dyn Error>;
@@ -153,6 +168,12 @@ enum Commands {
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
     },
+    /// Release a new Mycelia version
+    Release {
+        /// The new Mycelia version
+        #[clap(long)]
+        version: String,
+    },
 }
 
 #[tokio::main]
@@ -201,6 +222,9 @@ async fn try_main() -> Result<(), DynError> {
             component,
         } => {
             deploy(ip, http_port, rpc_port, component).await;
+        }
+        Commands::Release { version } => {
+            release(version).await;
         }
     }
 
@@ -641,6 +665,30 @@ async fn try_deploy(
     }
 
     return Err(DeploymentError::ServerError);
+}
+
+async fn release() {
+    if let Err(e) = try_release().await {
+        error!("{}", e);
+
+        std::process::exit(-1);
+    }
+}
+
+async fn try_release() -> Result<(), ReleaseError> {
+    info!("Releasing new Mycelia version");
+
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let status = std::process::Command::new(cargo)
+        .current_dir(project_root())
+        .args(&["xtask", "release", format!("--version=", version).as_str()])
+        .status()?;
+
+    if !status.success() {
+        return;
+    }
+
+    return Ok(());
 }
 
 fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
