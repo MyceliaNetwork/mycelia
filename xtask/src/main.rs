@@ -75,8 +75,18 @@ enum ReleaseError {
         version_current: String,
         version_input: String,
     },
-    #[error("building workspace failded. Status code: {status:?}")]
+    #[error(
+        "building workspace failded.
+
+Status code: {status:?}"
+    )]
     BuildWorkspace { status: i32 },
+    #[error(
+        "`rustwrap --tag {version:?}` failed.
+
+Status code: {status:?}"
+    )]
+    Rustwrap { version: String, status: i32 },
 }
 
 type DynError = Box<dyn std::error::Error>;
@@ -314,7 +324,7 @@ async fn try_release() -> Result<(), ReleaseError> {
     }
 
     build_workspace_release().await?;
-    rustwrap(version_arg).await?;
+    rustwrap(version_input.unwrap()).await?;
 
     return Ok(());
 }
@@ -335,16 +345,19 @@ async fn build_workspace_release() -> Result<(), ReleaseError> {
     return Ok(());
 }
 
-fn rustwrap(version: &str) -> Result<(), ReleaseError> {
+async fn rustwrap(version: String) -> Result<(), ReleaseError> {
     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
 
     let status = Command::new(rustwrap)
         .current_dir(project_root())
-        .args(&[format("--tag {}", version)])
-        .status()?;
+        .args(&[format!("--tag {}", version)])
+        .status();
 
-    if !status.success() {
-        return Err(format!("`rustwrap --tag {}", version_input));
+    if !status.as_ref().unwrap().success() {
+        return Err(ReleaseError::Rustwrap {
+            version,
+            status: status.unwrap().code().unwrap(),
+        });
     }
 
     return Ok(());
