@@ -625,6 +625,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "development_server",
+ "dialoguer",
  "env_logger",
  "function_service",
  "log",
@@ -4466,6 +4467,7 @@ dependencies = [
  "dialoguer",
  "env_logger",
  "log",
+ "thiserror",
  "tokio",
  "version-compare",
 ]

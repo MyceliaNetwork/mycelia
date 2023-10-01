@@ -13,5 +13,6 @@ authors = ["Daniel Terwiel <dani+mycelia@departure.dev>"]
 dialoguer = "0.11.0"
 env_logger = { workspace = true }
 log = { workspace = true }
+thiserror.workspace = true
 tokio = { version = "1.32.0", features = ["full"] }
 version-compare = "0.1.1"
