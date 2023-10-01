@@ -5,11 +5,65 @@ use std::{
     collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
-    process::{Command, ExitStatus},
+    process::Command,
 };
 use thiserror::Error;
 use version_compare::{compare_to, Cmp};
 
+#[derive(Debug, Error)]
+enum BuildError {
+    #[error(
+        "
+    `cargo build --workspace` failed.
+
+Status code: {status}"
+    )]
+    Workspace { status: i32 },
+
+    #[error(
+        "Build wasm '{guest_name:?}' failed.
+
+Command: `cargo build --target wasm32-wasi --release --package {guest_name:?}`
+Guest path: '{guest_path:?}'
+Status code: {status}"
+    )]
+    Wasm {
+        guest_name: String,
+        guest_path: PathBuf,
+        status: i32,
+    },
+
+    #[error("wasm guest file '{guest_name:?}' for '{guest_path:?}' does not exist")]
+    GuestFileNonExistent {
+        guest_name: String,
+        guest_path: PathBuf,
+    },
+
+    #[error(
+        "Build component '{guest_name:?}' failed.
+
+Command: `wasm-tools component new {path_wasm_guest:?} --adapt {path_wasi_snapshot:?} -o {dir_components:?}`
+Guest path: '{guest_path:?}'
+Status code: {status:?}"
+    )]
+    CommandFailed {
+        guest_name: String,
+        path_wasm_guest: PathBuf,
+        path_wasi_snapshot: PathBuf,
+        dir_components: PathBuf,
+        guest_path: PathBuf,
+        status: i32,
+    },
+
+    #[error("wasi snapshot file '{guest_name:?}' for '{guest_path:?}' does not exist")]
+    WasiSnapshotFileNonExistent {
+        guest_name: String,
+        guest_path: PathBuf,
+    },
+
+    #[error("component output directory '{dir:?}' for '{guest_name:?}' does not exist")]
+    DirComponentsNonExistent { dir: PathBuf, guest_name: String },
+}
 #[derive(Debug, Error)]
 enum ReleaseError {
     #[error("missing --version argument")]
@@ -22,7 +76,7 @@ enum ReleaseError {
         version_input: String,
     },
     #[error("building workspace failded. Status code: {status:?}")]
-    BuildWorkspace { status: ExitStatus },
+    BuildWorkspace { status: i32 },
 }
 
 type DynError = Box<dyn std::error::Error>;
@@ -132,26 +186,23 @@ fn build() -> Result<(), DynError> {
     Ok(())
 }
 
-fn build_workspace() -> Result<(), DynError> {
+fn build_workspace() -> Result<(), BuildError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
         .args(&["build", "--workspace"])
-        .status()?;
+        .status();
 
-    if !status.success() {
-        Err(format!(
-            "`cargo build --workspace` failed.
-
-Status code: {}",
-            status.code().unwrap()
-        ))?;
+    if !status.as_ref().unwrap().success() {
+        return Err(BuildError::Workspace {
+            status: status.unwrap().code().unwrap(),
+        });
     }
 
     Ok(())
 }
 
-fn build_wasm(guest: &Guest) -> Result<(), DynError> {
+fn build_wasm(guest: &Guest) -> Result<(), BuildError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
@@ -161,53 +212,48 @@ fn build_wasm(guest: &Guest) -> Result<(), DynError> {
             "--release",
             &format!("--package={}", guest.name_output),
         ])
-        .status()?;
+        .status();
 
-    if !status.success() {
-        Err(format!(
-            "Build wasm '{}' failed.
-
-Command: `cargo build --target wasm32-wasi --release --package {}`
-Guest path: '{}'
-Status code: {}",
-            guest.name,
-            guest.name,
-            guest.path.display(),
-            status.code().unwrap()
-        ))?;
+    if !status.as_ref().unwrap().success() {
+        let guest = guest.clone();
+        return Err(BuildError::Wasm {
+            guest_name: guest.name,
+            guest_path: guest.path,
+            status: status.unwrap().code().unwrap(),
+        });
     }
 
     Ok(())
 }
 
-fn build_component(guest: &Guest) -> Result<(), DynError> {
+fn build_component(guest: &Guest) -> Result<(), BuildError> {
     let wasm_tools = env::var("WASM_TOOLS").unwrap_or_else(|_| "wasm-tools".to_string());
 
     let path_wasm_guest =
         dir_target().join(format!("wasm32-wasi/release/{}.wasm", guest.name_output));
     if !path_wasm_guest.exists() {
-        Err(format!(
-            "wasm guest file '{}' for '{}' does not exist",
-            path_wasm_guest.display(),
-            guest.name
-        ))?;
+        let guest = guest.clone();
+        return Err(BuildError::GuestFileNonExistent {
+            guest_name: guest.name,
+            guest_path: guest.path,
+        });
     }
 
     let path_wasi_snapshot = project_root().join("wasi_snapshot_preview1.reactor.wasm.dev");
     if !path_wasi_snapshot.exists() {
-        Err(format!(
-            "wasi snapshot file '{}' for '{}' does not exist",
-            path_wasi_snapshot.display(),
-            guest.name
-        ))?;
+        let guest = guest.clone();
+        return Err(BuildError::WasiSnapshotFileNonExistent {
+            guest_name: guest.name,
+            guest_path: guest.path,
+        });
     }
 
     if !&dir_components().exists() {
-        Err(format!(
-            "component output directory '{}' for '{}' does not exist",
-            &dir_components().display(),
-            guest.name
-        ))?;
+        let guest = guest.clone();
+        return Err(BuildError::DirComponentsNonExistent {
+            dir: dir_components(),
+            guest_name: guest.name,
+        });
     }
 
     let cmd_wasm_guest = path_wasm_guest.display().to_string();
@@ -227,22 +273,18 @@ fn build_component(guest: &Guest) -> Result<(), DynError> {
             &cmd_wasi_snapshot,
             &cmd_component_output,
         ])
-        .status()?;
+        .status();
 
-    if !status.success() {
-        Err(format!(
-            "Build component '{}' failed.
-
-Command: `wasm-tools component new {} --adapt {} -o {}`
-Guest path: '{}'
-Status code: {}",
-            guest.name,
-            path_wasm_guest.display(),
-            path_wasi_snapshot.display(),
-            &dir_components().display(),
-            guest.path.display(),
-            status.code().unwrap()
-        ))?;
+    if !status.as_ref().unwrap().success() {
+        let guest = guest.clone();
+        return Err(BuildError::CommandFailed {
+            guest_name: guest.name,
+            path_wasm_guest: path_wasm_guest,
+            path_wasi_snapshot: path_wasi_snapshot,
+            dir_components: dir_components(),
+            guest_path: guest.path,
+            status: status.unwrap().code().unwrap(),
+        });
     }
 
     Ok(())
@@ -272,7 +314,7 @@ async fn try_release() -> Result<(), ReleaseError> {
     }
 
     build_workspace_release().await?;
-    // rustwrap(version_arg).await?;
+    rustwrap(version_arg).await?;
 
     return Ok(());
 }
@@ -286,27 +328,27 @@ async fn build_workspace_release() -> Result<(), ReleaseError> {
 
     if status.is_err() {
         return Err(ReleaseError::BuildWorkspace {
-            status: status.unwrap(),
+            status: status.unwrap().code().unwrap(),
         });
     }
 
     return Ok(());
 }
 
-// fn rustwrap(version: &str) -> Result<(), DynError> {
-//     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
+fn rustwrap(version: &str) -> Result<(), ReleaseError> {
+    let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
 
-//     let status = Command::new(rustwrap)
-//         .current_dir(project_root())
-//         .args(&[format("--tag {}", version)])
-//         .status()?;
+    let status = Command::new(rustwrap)
+        .current_dir(project_root())
+        .args(&[format("--tag {}", version)])
+        .status()?;
 
-//     if !status.success() {
-//         return Err(format!("`rustwrap --tag {}", version_input));
-//     }
+    if !status.success() {
+        return Err(format!("`rustwrap --tag {}", version_input));
+    }
 
-//     return Ok(());
-// }
+    return Ok(());
+}
 
 fn project_root() -> PathBuf {
     Path::new(&env!("CARGO_MANIFEST_DIR"))
