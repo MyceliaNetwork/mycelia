@@ -69,11 +69,11 @@ enum ReleaseError {
     #[error("missing --version argument")]
     MissingVersion,
     #[error(
-        "argument --version ({version_input:?}) is lower than current version ({version_current:?}"
+        "argument --version ({version_input:?}) is lower than current version ({version_current:?})"
     )]
     VersionLowerThanCurrent {
-        version_current: String,
         version_input: String,
+        version_current: String,
     },
     #[error(
         "building workspace failded.
@@ -310,21 +310,26 @@ async fn release() -> Result<(), ReleaseError> {
 
 async fn try_release() -> Result<(), ReleaseError> {
     let version_current: &str = env!("CARGO_PKG_VERSION");
-    println!("🪵 [main.rs:239]~ version_current = {}", version_current);
-    let version_input = env::args().nth(2);
-    if version_input.is_none() {
-        return Err(ReleaseError::MissingVersion);
+    let version_arg_tag = env::args().nth(2);
+    let version_arg_val = env::args().nth(3);
+    match version_arg_tag.clone() {
+        None => return Err(ReleaseError::MissingVersion),
+        Some(tag) => {
+            if tag != "--version" {
+                return Err(ReleaseError::MissingVersion);
+            }
+        }
     }
 
-    if compare_to(version_current, version_input.clone().unwrap(), Cmp::Gt).unwrap() {
+    if compare_to(version_current, version_arg_val.clone().unwrap(), Cmp::Gt).is_err() {
         return Err(ReleaseError::VersionLowerThanCurrent {
-            version_input: version_input.unwrap(),
+            version_input: version_arg_val.clone().unwrap(),
             version_current: version_current.to_string(),
         });
     }
 
     build_workspace_release().await?;
-    rustwrap(version_input.unwrap()).await?;
+    rustwrap(version_arg_val.unwrap()).await?;
 
     return Ok(());
 }
