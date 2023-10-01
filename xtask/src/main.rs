@@ -1,4 +1,5 @@
 use log::error;
+
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -41,7 +42,12 @@ async fn try_main() -> Result<(), DynError> {
 
     match task.as_deref() {
         Some("build") => build()?,
-        Some("release") => release().await?,
+        Some("release") => match release().await {
+            Err(e) => {
+                return Err(Box::new(e));
+            }
+            Ok(_) => {}
+        },
         _ => print_help(),
     }
     return Ok(());
@@ -242,12 +248,11 @@ Status code: {}",
     Ok(())
 }
 
-async fn release() -> Result<(), DynError> {
+async fn release() -> Result<(), ReleaseError> {
     if let Err(e) = try_release().await {
-        error!("{}", e);
-
-        std::process::exit(-1);
+        return Err(e);
     }
+
     return Ok(());
 }
 
@@ -255,7 +260,7 @@ async fn try_release() -> Result<(), ReleaseError> {
     let version_current: &str = env!("CARGO_PKG_VERSION");
     println!("🪵 [main.rs:239]~ version_current = {}", version_current);
     let version_input = env::args().nth(2);
-    if version_input.clone().is_none() {
+    if version_input.is_none() {
         return Err(ReleaseError::MissingVersion);
     }
 
