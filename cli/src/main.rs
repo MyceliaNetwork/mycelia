@@ -678,13 +678,23 @@ async fn release() {
 async fn try_release() -> Result<(), ReleaseError> {
     info!("Releasing new Mycelia version");
 
+    let version_input: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Version")
+        .interact_text()
+        .unwrap();
+
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = std::process::Command::new(cargo)
         .current_dir(project_root())
-        .args(&["xtask", "release", format!("--version=", version).as_str()])
+        .args(&[
+            "xtask",
+            "release",
+            format!("--version=", version_input).as_str(),
+        ])
         .status()?;
 
     if !status.success() {
+        todo!("TODO");
         return;
     }
 

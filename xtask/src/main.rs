@@ -4,9 +4,25 @@ use std::{
     collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, ExitStatus},
 };
+use thiserror::Error;
 use version_compare::{compare_to, Cmp};
+
+#[derive(Debug, Error)]
+enum ReleaseError {
+    #[error("missing --version argument")]
+    MissingVersion,
+    #[error(
+        "argument --version ({version_input:?}) is lower than current version ({version_current:?}"
+    )]
+    VersionLowerThanCurrent {
+        version_current: String,
+        version_input: String,
+    },
+    #[error("building workspace failded. Status code: {status:?}")]
+    BuildWorkspace { status: ExitStatus },
+}
 
 type DynError = Box<dyn std::error::Error>;
 
@@ -21,7 +37,7 @@ async fn main() {
 async fn try_main() -> Result<(), DynError> {
     let task = env::args().nth(1);
 
-    println!("{:#?}", env::args());
+    // println!("{:#?}", env::args());
 
     match task.as_deref() {
         Some("build") => build()?,
@@ -235,19 +251,19 @@ async fn release() -> Result<(), DynError> {
     return Ok(());
 }
 
-async fn try_release() -> Result<(), DynError> {
+async fn try_release() -> Result<(), ReleaseError> {
     let version_current: &str = env!("CARGO_PKG_VERSION");
-    println!(
-        "🪵 [main.rs:239]~ token ~ \x1b[0;32mversion_current\x1b[0m = {}",
-        version_current
-    );
-    let version_arg = env::args().nth(2).expect("Version argument is missing");
+    println!("🪵 [main.rs:239]~ version_current = {}", version_current);
+    let version_input = env::args().nth(2);
+    if version_input.clone().is_none() {
+        return Err(ReleaseError::MissingVersion);
+    }
 
-    if compare_to(version_current, version_arg.clone(), Cmp::Gt).unwrap() {
-        return Err(format!(
-            "Version argument '{}' is lower than current version '{}'",
-            version_arg, version_current
-        ))?;
+    if compare_to(version_current, version_input.clone().unwrap(), Cmp::Gt).unwrap() {
+        return Err(ReleaseError::VersionLowerThanCurrent {
+            version_input: version_input.unwrap(),
+            version_current: version_current.to_string(),
+        });
     }
 
     build_workspace_release().await?;
@@ -256,16 +272,17 @@ async fn try_release() -> Result<(), DynError> {
     return Ok(());
 }
 
-async fn build_workspace_release() -> Result<(), DynError> {
+async fn build_workspace_release() -> Result<(), ReleaseError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
         .args(&["build", "--workspace", "--release"])
-        .status()?;
+        .status();
 
-    if !status.success() {
-        // format!("`cargo build --workspace --release` failed.")
-        return Err("x".to_string().into());
+    if status.is_err() {
+        return Err(ReleaseError::BuildWorkspace {
+            status: status.unwrap(),
+        });
     }
 
     return Ok(());

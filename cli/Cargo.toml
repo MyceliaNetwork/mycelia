@@ -29,6 +29,7 @@ function_service = { path = "../services/function" }
 # wasm_components = { path = "../wasm_components" }
 xtask = { path = "../xtask" }
 rustwrap = "1.0.5"
+dialoguer = "0.11.0"
 
 
 [build-dependencies]
