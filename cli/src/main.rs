@@ -689,7 +689,7 @@ async fn try_release() -> Result<(), ReleaseError> {
         .args(&[
             "xtask",
             "release",
-            format!("--version=", version_input).as_str(),
+            format!("--version={}", version_input).as_str(),
         ])
         .status()?;
 
