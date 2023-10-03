@@ -1582,6 +1582,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "js_function"
+version = "0.1.0"
+
+[[package]]
 name = "kv-log-macro"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
