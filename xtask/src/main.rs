@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, info};
 
 use std::{
     cmp::Ordering,
@@ -105,7 +105,7 @@ type DynError = Box<dyn std::error::Error>;
 #[tokio::main]
 async fn main() {
     if let Err(e) = try_main().await {
-        eprintln!("{e:#};");
+        error!("{e:#}");
         std::process::exit(-1);
     }
 }
@@ -127,7 +127,7 @@ async fn try_main() -> Result<(), DynError> {
 }
 
 fn print_help() {
-    eprintln!(
+    info!(
         "Tasks:
 
 wasm            build wasm using wasm32-wasi target
@@ -329,24 +329,15 @@ async fn try_release() -> Result<(), ReleaseError> {
             }
         }
     }
-    match version_arg_val.clone() {
-        None => return Err(ReleaseError::MissingVersionVal),
-        Some(_) => {}
+    if version_arg_val.clone().is_none() {
+        return Err(ReleaseError::MissingVersionVal);
     }
 
-    println!(
-        "🪵 [main.rs:330]~ token ~ \x1b[0;32mversion_current\x1b[0m = {}",
-        version_current
-    );
-    println!(
-        "🪵 [main.rs:331]~ token ~ \x1b[0;32mversion_arg_val\x1b[0m = {}",
-        version_arg_val.clone().unwrap()
-    );
-    let comparison = compare(version_current, version_arg_val.clone().unwrap());
-    if comparison.is_err() {
+    let version_comparison = compare(version_current, version_arg_val.clone().unwrap());
+    if version_comparison.is_err() {
         return Err(ReleaseError::VersionComparisonError);
     }
-    match comparison.unwrap() {
+    match version_comparison.unwrap() {
         Cmp::Gt => {
             return Err(ReleaseError::VersionLowerThanCurrent {
                 version_input: version_arg_val.clone().unwrap(),

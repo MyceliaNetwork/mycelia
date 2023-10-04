@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand};
-use dialoguer::{theme::ColorfulTheme, Input};
 use log::{debug, error, info, trace, warn};
 
 use std::{
@@ -17,6 +16,7 @@ use tokio::{
     process::{Child, ChildStderr, ChildStdout, Command},
     time::{Duration, Instant},
 };
+use version_compare::{compare, Cmp};
 
 pub mod development {
     tonic::include_proto!("development");
@@ -74,28 +74,41 @@ enum DeploymentError {
 #[derive(Debug, Error)]
 enum ReleaseError {
     #[error(
-        "incorrect version '{version_input:?}'. Must be higher than current: {version_current:?}"
+        "argument `--version {version_input:?}` is lower than the current version {version_current:?}"
     )]
-    VersionIncorrect {
+    VersionLowerThanCurrent {
         version_input: String,
         version_current: String,
     },
-    #[error("release error. Cause: {cause:?}")]
-    ReleaseError { cause: String },
+    #[error(
+        "argument `--version {version_input:?}` equal to the current version {version_current:?}"
+    )]
+    VersionEqualToCurrent {
+        version_input: String,
+        version_current: String,
+    },
+    #[error("Version comparison error")]
+    VersionComparisonError,
 }
 
 type DynError = Box<dyn Error>;
 
+struct DevelopmentServerClient {
+    process: Child,
+}
+
 #[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
-#[command(propagate_version = true)]
+#[command(
+    author,
+    about,
+    version,
+    long_about = None,
+    propagate_version = true,
+    disable_version_flag = true,
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-}
-
-struct DevelopmentServerClient {
-    process: Child,
 }
 
 #[derive(Debug, Subcommand)]
@@ -666,25 +679,37 @@ async fn try_deploy(
     return Err(DeploymentError::ServerError);
 }
 
-async fn release(version: &String) {
-    println!(
-        "🪵 [main.rs:670]~ token ~ \x1b[0;32mversion\x1b[0m = {}",
-        version
-    );
-    if let Err(e) = try_release().await {
-        error!("{}", e);
+async fn release(version_arg_val: &String) {
+    if let Err(e) = try_release(version_arg_val).await {
+        error!("{e:#}");
 
         std::process::exit(-1);
     }
 }
 
-async fn try_release() -> Result<(), ReleaseError> {
+async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
     info!("Releasing new Mycelia version");
 
-    let version_input: String = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Version")
-        .interact_text()
-        .unwrap();
+    let version_current: &str = env!("CARGO_PKG_VERSION");
+    let version_comparison = compare(version_current, version_arg_val.clone());
+    if version_comparison.is_err() {
+        return Err(ReleaseError::VersionComparisonError);
+    }
+    match version_comparison.unwrap() {
+        Cmp::Gt => {
+            return Err(ReleaseError::VersionLowerThanCurrent {
+                version_input: version_arg_val.clone(),
+                version_current: version_current.to_string(),
+            });
+        }
+        Cmp::Eq => {
+            return Err(ReleaseError::VersionEqualToCurrent {
+                version_input: version_arg_val.clone(),
+                version_current: version_current.to_string(),
+            });
+        }
+        _ => {}
+    }
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = std::process::Command::new(cargo)
@@ -692,7 +717,7 @@ async fn try_release() -> Result<(), ReleaseError> {
         .args(&[
             "xtask",
             "release",
-            format!("--version={}", version_input).as_str(),
+            format!("--version={}", version_arg_val).as_str(),
         ])
         .status();
 
