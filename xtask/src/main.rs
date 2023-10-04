@@ -355,7 +355,7 @@ async fn rustwrap(version: String) -> Result<(), ReleaseError> {
 
     let status = Command::new(rustwrap)
         .current_dir(project_root())
-        .args(&[format!("--tag {}", version)])
+        .args(&[format!("--tag"), version.clone()])
         .status();
 
     if !status.as_ref().unwrap().success() {
