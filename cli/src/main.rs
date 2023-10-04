@@ -89,6 +89,12 @@ enum ReleaseError {
     },
     #[error("Version comparison error")]
     VersionComparisonError,
+    #[error(
+        "`cargo xtask --version {version:?}` failed.
+
+        Status code: {status:?}"
+    )]
+    XtaskReleaseFailed { version: String, status: i32 },
 }
 
 type DynError = Box<dyn Error>;
@@ -196,8 +202,8 @@ async fn main() -> Result<(), DynError> {
 
     env_logger::init();
 
-    if let Err(e) = try_main().await {
-        error!("{}", e);
+    if let Err(error) = try_main().await {
+        error!("{error:?}");
     }
 
     Ok(())
@@ -350,21 +356,25 @@ async fn spawn_client(ip: &str, http_port: &u16, rpc_port: &u16, open_browser: &
         error!(
             "Process exited. Cannot continue. Error:
 
-{:#?}",
-            status
+{status:#?}"
         );
     });
 
     info!("Started development server");
-    debug!("HTTP development server listening on {}", http_addr);
-    debug!("RPC server listening on {}", rpc_addr);
+    debug!("HTTP development server listening on {http_addr}");
+    debug!("RPC server listening on {rpc_addr}");
 
     if *open_browser {
         let server_state = poll_server_state(ip, rpc_port, &true).await;
         if server_state.is_ok_and(|s| s == ServerState::Started) {
             match open::that(&http_addr) {
-                Ok(()) => debug!("Opened '{}' in your default browser.", http_addr),
-                Err(err) => error!("An error occurred when opening '{}': {}", http_addr, err),
+                Ok(()) => debug!("Opened '{http_addr}' in your default browser."),
+                Err(error) => error!(
+                    "An error occurred when opening '{http_addr}'.
+Error:
+
+{error:?}"
+                ),
             }
         }
     }
@@ -373,11 +383,11 @@ async fn spawn_client(ip: &str, http_port: &u16, rpc_port: &u16, open_browser: &
 
     return tokio::select! {
         // Wait for the handlers to exit. Currently this will never happen
-        wait = wait => trace!("wait {:#?}", wait),
+        wait = wait => trace!("wait {wait:#?}"),
         task_handle = task_handle => {
             match task_handle {
                 Ok(_) => std::process::exit(-1),
-                Err(e) => error!("task_handle error {:#?}", e)
+                Err(error) => error!("task_handle error {error:?}")
             }
         }
     };
@@ -406,7 +416,7 @@ fn start_development_server(
         .expect("Unable to spawn process");
 
     let proc_id = process.id().expect("Unable to fetch process id");
-    trace!("proc id: {}", proc_id);
+    trace!("proc id: {proc_id}",);
 
     let stdout = process.stdout.take().unwrap();
     let stdout_reader = BufReader::new(stdout);
@@ -433,9 +443,9 @@ async fn setup_listeners(
         let mut reader = stdout_reader.lines();
         loop {
             match reader.next_line().await {
-                Ok(Some(string)) => trace!("handle_stdout: {}", string),
+                Ok(Some(string)) => trace!("handle_stdout: {string}",),
                 Ok(None) => trace!("handle_stdout: None"),
-                Err(e) => trace!("handle_stdout: {:#?}", e),
+                Err(error) => trace!("handle_stdout: {error:#?}"),
             }
         }
     });
@@ -446,7 +456,7 @@ async fn setup_listeners(
             match reader.next_line().await {
                 Ok(Some(string)) => info!("handle_stderr: {}", string),
                 Ok(None) => trace!("handle_stderr: None"),
-                Err(e) => info!("handle_stderr: {:#?}", e),
+                Err(error) => info!("handle_stderr: {error:#?}"),
             }
         }
     });
@@ -465,8 +475,8 @@ async fn start(
     open_browser: &bool,
     background: &bool,
 ) {
-    if let Err(e) = try_start(ip, http_port, rpc_port, open_browser, background).await {
-        error!("{}", e);
+    if let Err(error) = try_start(ip, http_port, rpc_port, open_browser, background).await {
+        error!("{error:?}");
 
         std::process::exit(-1);
     }
@@ -516,8 +526,8 @@ async fn start_background(http_port: &u16, rpc_port: &u16) {
 }
 
 async fn new() -> Result<(), DynError> {
-    if let Err(e) = try_new().await {
-        error!("{}", e);
+    if let Err(error) = try_new().await {
+        error!("{error:?}");
 
         std::process::exit(-1);
     }
@@ -558,8 +568,8 @@ Status code: {}",
 }
 
 async fn stop(ip: &str, rpc_port: &u16) {
-    if let Err(e) = try_stop(ip, rpc_port).await {
-        error!("{}", e);
+    if let Err(error) = try_stop(ip, rpc_port).await {
+        error!("{error:?}");
 
         std::process::exit(-1);
     }
@@ -608,8 +618,8 @@ async fn try_stop(ip: &str, rpc_port: &u16) -> Result<(), StopError> {
  * This will take the file "./components/game.wasm" and deploy it.
  */
 async fn deploy(ip: &String, http_port: &u16, rpc_port: &u16, component: &String) {
-    if let Err(e) = try_deploy(ip, http_port, rpc_port, component).await {
-        error!("{}", e);
+    if let Err(error) = try_deploy(ip, http_port, rpc_port, component).await {
+        error!("{error:?}");
 
         std::process::exit(-1);
     }
@@ -688,7 +698,7 @@ async fn release(version_arg_val: &String) {
 }
 
 async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
-    info!("Releasing new Mycelia version");
+    info!("Releasing new Mycelia version {version_arg_val:}");
 
     let version_current: &str = env!("CARGO_PKG_VERSION");
     let version_comparison = compare(version_current, version_arg_val.clone());
@@ -721,8 +731,11 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
         ])
         .status();
 
-    if !status.unwrap().success() {
-        todo!("TODO");
+    if status.is_err() {
+        return Err(ReleaseError::XtaskReleaseFailed {
+            version: version_arg_val.clone(),
+            status: status.unwrap().code().unwrap_or(-1),
+        });
     }
 
     return Ok(());
