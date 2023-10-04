@@ -104,8 +104,8 @@ type DynError = Box<dyn std::error::Error>;
 
 #[tokio::main]
 async fn main() {
-    if let Err(e) = try_main().await {
-        error!("{e:#}");
+    if let Err(error) = try_main().await {
+        error!("{error:#}");
         std::process::exit(-1);
     }
 }
@@ -214,7 +214,7 @@ fn build_workspace() -> Result<(), BuildError> {
 
     if !status.as_ref().unwrap().success() {
         return Err(BuildError::Workspace {
-            status: status.unwrap().code().unwrap(),
+            status: status.unwrap().code().unwrap_or(-1),
         });
     }
 
@@ -238,7 +238,7 @@ fn build_wasm(guest: &Guest) -> Result<(), BuildError> {
         return Err(BuildError::Wasm {
             guest_name: guest.name,
             guest_path: guest.path,
-            status: status.unwrap().code().unwrap(),
+            status: status.unwrap().code().unwrap_or(-1),
         });
     }
 
@@ -302,7 +302,7 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
             path_wasi_snapshot: path_wasi_snapshot,
             dir_components: dir_components(),
             guest_path: guest.path,
-            status: status.unwrap().code().unwrap(),
+            status: status.unwrap().code().unwrap_or(-1),
         });
     }
 
@@ -368,7 +368,7 @@ async fn build_workspace_release() -> Result<(), ReleaseError> {
 
     if status.is_err() {
         return Err(ReleaseError::BuildWorkspace {
-            status: status.unwrap().code().unwrap(),
+            status: status.unwrap().code().unwrap_or(-1),
         });
     }
 
@@ -386,7 +386,7 @@ async fn rustwrap(version: String) -> Result<(), ReleaseError> {
     if !status.as_ref().unwrap().success() {
         return Err(ReleaseError::Rustwrap {
             version,
-            status: status.unwrap().code().unwrap(),
+            status: status.unwrap().code().unwrap_or(-1),
         });
     }
 
