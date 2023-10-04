@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, Input};
 use log::{debug, error, info, trace, warn};
-use version_compare::{compare, compare_to, Cmp, Version};
 
 use std::{
     env,
@@ -667,7 +666,11 @@ async fn try_deploy(
     return Err(DeploymentError::ServerError);
 }
 
-async fn release() {
+async fn release(version: &String) {
+    println!(
+        "🪵 [main.rs:670]~ token ~ \x1b[0;32mversion\x1b[0m = {}",
+        version
+    );
     if let Err(e) = try_release().await {
         error!("{}", e);
 
@@ -691,11 +694,10 @@ async fn try_release() -> Result<(), ReleaseError> {
             "release",
             format!("--version={}", version_input).as_str(),
         ])
-        .status()?;
+        .status();
 
-    if !status.success() {
+    if !status.unwrap().success() {
         todo!("TODO");
-        return;
     }
 
     return Ok(());
