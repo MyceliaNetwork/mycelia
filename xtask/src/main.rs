@@ -8,7 +8,7 @@ use std::{
     process::Command,
 };
 use thiserror::Error;
-use version_compare::{compare_to, Cmp};
+use version_compare::{compare, Cmp};
 
 #[derive(Debug, Error)]
 enum BuildError {
@@ -66,15 +66,26 @@ Status code: {status:?}"
 }
 #[derive(Debug, Error)]
 enum ReleaseError {
-    #[error("missing --version argument")]
-    MissingVersion,
+    #[error("missing --version argument. Example: `--version 1.2.3`")]
+    MissingVersionArg,
+    #[error("missing --version value. Example: `--version 1.2.3`")]
+    MissingVersionVal,
     #[error(
-        "argument --version ({version_input:?}) is lower than current version ({version_current:?})"
+        "argument `--version {version_input:?}` is lower than the current version {version_current:?}"
     )]
     VersionLowerThanCurrent {
         version_input: String,
         version_current: String,
     },
+    #[error(
+        "argument `--version {version_input:?}` equal to the current version {version_current:?}"
+    )]
+    VersionEqualToCurrent {
+        version_input: String,
+        version_current: String,
+    },
+    #[error("Version comparison error")]
+    VersionComparisonError,
     #[error(
         "building workspace failded.
 
@@ -94,15 +105,13 @@ type DynError = Box<dyn std::error::Error>;
 #[tokio::main]
 async fn main() {
     if let Err(e) = try_main().await {
-        eprintln!("{}", e);
+        eprintln!("{e:#};");
         std::process::exit(-1);
     }
 }
 
 async fn try_main() -> Result<(), DynError> {
     let task = env::args().nth(1);
-
-    // println!("{:#?}", env::args());
 
     match task.as_deref() {
         Some("build") => build()?,
@@ -313,19 +322,44 @@ async fn try_release() -> Result<(), ReleaseError> {
     let version_arg_tag = env::args().nth(2);
     let version_arg_val = env::args().nth(3);
     match version_arg_tag.clone() {
-        None => return Err(ReleaseError::MissingVersion),
+        None => return Err(ReleaseError::MissingVersionArg),
         Some(tag) => {
             if tag != "--version" {
-                return Err(ReleaseError::MissingVersion);
+                return Err(ReleaseError::MissingVersionArg);
             }
         }
     }
+    match version_arg_val.clone() {
+        None => return Err(ReleaseError::MissingVersionVal),
+        Some(_) => {}
+    }
 
-    if compare_to(version_current, version_arg_val.clone().unwrap(), Cmp::Gt).is_err() {
-        return Err(ReleaseError::VersionLowerThanCurrent {
-            version_input: version_arg_val.clone().unwrap(),
-            version_current: version_current.to_string(),
-        });
+    println!(
+        "🪵 [main.rs:330]~ token ~ \x1b[0;32mversion_current\x1b[0m = {}",
+        version_current
+    );
+    println!(
+        "🪵 [main.rs:331]~ token ~ \x1b[0;32mversion_arg_val\x1b[0m = {}",
+        version_arg_val.clone().unwrap()
+    );
+    let comparison = compare(version_current, version_arg_val.clone().unwrap());
+    if comparison.is_err() {
+        return Err(ReleaseError::VersionComparisonError);
+    }
+    match comparison.unwrap() {
+        Cmp::Gt => {
+            return Err(ReleaseError::VersionLowerThanCurrent {
+                version_input: version_arg_val.clone().unwrap(),
+                version_current: version_current.to_string(),
+            });
+        }
+        Cmp::Eq => {
+            return Err(ReleaseError::VersionEqualToCurrent {
+                version_input: version_arg_val.clone().unwrap(),
+                version_current: version_current.to_string(),
+            });
+        }
+        _ => {}
     }
 
     build_workspace_release().await?;
