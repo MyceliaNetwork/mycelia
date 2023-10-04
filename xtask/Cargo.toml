@@ -16,3 +16,4 @@ env_logger = { workspace = true }
 log = { workspace = true }
 tokio = { version = "1.32.0", features = ["full"] }
 version-compare = { workspace = true }
+trim-margin = "0.1.0"
