@@ -706,7 +706,7 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
         return Err(ReleaseError::VersionComparisonError);
     }
     match version_comparison.unwrap() {
-        Cmp::Gt => {
+        Cmp::Lt => {
             return Err(ReleaseError::VersionLowerThanCurrent {
                 version_input: version_arg_val.clone(),
                 version_current: version_current.to_string(),

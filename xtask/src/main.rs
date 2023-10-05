@@ -310,8 +310,9 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
 }
 
 async fn release() -> Result<(), ReleaseError> {
-    if let Err(e) = try_release().await {
-        return Err(e);
+    if let Err(error) = try_release().await {
+        error!("{error}");
+        return Err(error);
     }
 
     return Ok(());
@@ -338,7 +339,7 @@ async fn try_release() -> Result<(), ReleaseError> {
         return Err(ReleaseError::VersionComparisonError);
     }
     match version_comparison.unwrap() {
-        Cmp::Gt => {
+        Cmp::Lt => {
             return Err(ReleaseError::VersionLowerThanCurrent {
                 version_input: version_arg_val.clone().unwrap(),
                 version_current: version_current.to_string(),
