@@ -311,11 +311,9 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
 
 async fn release() -> Result<(), ReleaseError> {
     if let Err(error) = try_release().await {
-        eprintln!("{:#?}", error);
-        return Err(error);
+        eprintln!("{error:#}");
+        std::process::exit(-1);
     }
-
-    println!("hoax");
     return Ok(());
 }
 
@@ -335,24 +333,18 @@ async fn try_release() -> Result<(), ReleaseError> {
         return Err(ReleaseError::MissingVersionVal);
     }
 
-    println!(
-        "🪵 [main.rs:337]~ token ~ \x1b[0;32mversion_current\x1b[0m = {}",
-        version_current
-    );
     let version_comparison = compare(version_arg_val.clone().unwrap(), version_current);
     if version_comparison.is_err() {
         return Err(ReleaseError::VersionComparisonError);
     }
     match version_comparison.unwrap() {
         Cmp::Lt => {
-            println!("1");
             return Err(ReleaseError::VersionLowerThanCurrent {
                 version_input: version_arg_val.clone().unwrap(),
                 version_current: version_current.to_string(),
             });
         }
         Cmp::Eq => {
-            println!("2");
             return Err(ReleaseError::VersionEqualToCurrent {
                 version_input: version_arg_val.clone().unwrap(),
                 version_current: version_current.to_string(),
@@ -361,7 +353,6 @@ async fn try_release() -> Result<(), ReleaseError> {
         _ => {}
     }
 
-    println!("test");
     build_workspace_release().await?;
     rustwrap(version_arg_val.unwrap()).await?;
 

@@ -691,8 +691,7 @@ async fn try_deploy(
 
 async fn release(version_arg_val: &String) {
     if let Err(error) = try_release(version_arg_val).await {
-        eprintln!("{:#?}", error);
-        // error!("{error:#}");
+        error!("{error:#}");
 
         std::process::exit(-1);
     }
@@ -702,12 +701,6 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
     info!("Releasing new Mycelia version {version_arg_val:}");
 
     let version_current: &str = env!("CARGO_PKG_VERSION");
-
-    println!(
-        "🪵 [main.rs:704]~ token ~ \x1b[0;32mversion_arg_val.clone()\x1b[0m = {}",
-        version_arg_val.clone()
-    );
-
     let version_comparison = compare(version_arg_val.clone(), version_current);
     if version_comparison.is_err() {
         return Err(ReleaseError::VersionComparisonError);
