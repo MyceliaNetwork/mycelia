@@ -690,8 +690,9 @@ async fn try_deploy(
 }
 
 async fn release(version_arg_val: &String) {
-    if let Err(e) = try_release(version_arg_val).await {
-        error!("{e:#}");
+    if let Err(error) = try_release(version_arg_val).await {
+        eprintln!("{:#?}", error);
+        // error!("{error:#}");
 
         std::process::exit(-1);
     }
@@ -701,18 +702,24 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
     info!("Releasing new Mycelia version {version_arg_val:}");
 
     let version_current: &str = env!("CARGO_PKG_VERSION");
-    let version_comparison = compare(version_current, version_arg_val.clone());
+
+    println!(
+        "🪵 [main.rs:704]~ token ~ \x1b[0;32mversion_arg_val.clone()\x1b[0m = {}",
+        version_arg_val.clone()
+    );
+
+    let version_comparison = compare(version_arg_val.clone(), version_current);
     if version_comparison.is_err() {
         return Err(ReleaseError::VersionComparisonError);
     }
-    match version_comparison.unwrap() {
-        Cmp::Lt => {
+    match version_comparison {
+        Ok(Cmp::Lt) => {
             return Err(ReleaseError::VersionLowerThanCurrent {
                 version_input: version_arg_val.clone(),
                 version_current: version_current.to_string(),
             });
         }
-        Cmp::Eq => {
+        Ok(Cmp::Eq) => {
             return Err(ReleaseError::VersionEqualToCurrent {
                 version_input: version_arg_val.clone(),
                 version_current: version_current.to_string(),
@@ -724,11 +731,7 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = std::process::Command::new(cargo)
         .current_dir(project_root())
-        .args(&[
-            "xtask",
-            "release",
-            format!("--version={}", version_arg_val).as_str(),
-        ])
+        .args(&["xtask", "release", "--version", version_arg_val])
         .status();
 
     if status.is_err() {
