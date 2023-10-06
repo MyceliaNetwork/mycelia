@@ -1,0 +1,12 @@
+name: release-rust-binary
+on:
+  pull_request:
+    branches:
+      - "releases/**"
+jobs:
+  check-bats-version:
+    runs-on: ubuntu-latest
+    steps:
+      # https://github.com/marketplace/actions/build-and-upload-rust-binary-to-github-releases
+      # - name: Build and upload Rust binary to GitHub Releases
+      - uses: taiki-e/upload-rust-binary-action@v1.16.1

@@ -8,12 +8,12 @@ targets:
   - platform: darwin
     arch: x64
     url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.tar.gz
-  - platform: darwin
-    arch: x64
-    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.tar.gz
+  # TODO: add arm64
+  # - platform: darwin
+  #   arch: arm64
+  #   url_template: https://github.com/rusty-ferris-club/recon/releases/download/v0.6.0/recon-aarch64-macos.tar.xz
 
 # provider: npm
-# both recon-root.json and recon-sub.json paths are relative to working folder
 npm:
   publish: false # dont publish to npm, just generate the packages on disk
   org: "@departurelabs"
@@ -25,7 +25,6 @@ npm:
   sub:
     manifest: rustwrap/mycelia-sub.json # NOTE: I have no idea why both root & sub are necessary
     readme: README.md
-#
 # provider: homebrew
 # brew:
 #   name: mycelia
