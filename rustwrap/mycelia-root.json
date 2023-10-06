@@ -1,6 +1,5 @@
 {
   "name": "@departurelabs/mycelia",
-  "version": "0.1.0",
   "description": "Mycelia SDK",
   "bin": {
     "mycelia": "../target/release/cli"
