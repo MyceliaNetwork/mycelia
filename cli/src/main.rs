@@ -1,12 +1,13 @@
 use clap::{Parser, Subcommand};
+use dialoguer::{theme::ColorfulTheme, Input};
 use log::{debug, error, info, trace, warn};
+use tokio::sync::oneshot::channel;
 
 use std::{
     env,
     error::Error,
     fs,
     future::Future,
-    io,
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -69,6 +70,14 @@ enum DeploymentError {
     DeploymentError { cause: String },
     #[error("server error")]
     ServerError,
+}
+
+#[derive(Debug, Error)]
+enum NewProjectError {
+    #[error("npm/npx not found")]
+    NpmNotFound,
+    #[error("npm init failed. Status code: {status:?}")]
+    NpmInitFailed { status: i32 },
 }
 
 #[derive(Debug, Error)]
@@ -339,7 +348,7 @@ async fn poll_server_state(
     }
 }
 
-async fn spawn_client(ip: &str, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
+async fn spawn_dev_server_client(ip: &str, http_port: &u16, rpc_port: &u16, open_browser: &bool) {
     let http_addr = format!("http://{}:{}", ip, http_port);
     let rpc_addr = format!("http://{}:{}", ip, rpc_port);
     let (mut client, wait) = start_development_server(http_port, rpc_port);
@@ -494,7 +503,7 @@ async fn try_start(
 
     match server_state(rpc_addr, &false).await {
         Ok(_) => match *background {
-            false => spawn_client(ip, http_port, rpc_port, open_browser).await,
+            false => spawn_dev_server_client(ip, http_port, rpc_port, open_browser).await,
             true => start_background(http_port, rpc_port).await,
         },
         Err(err) => {
@@ -540,28 +549,53 @@ async fn try_new() -> Result<(), DynError> {
 
     fs::create_dir_all(&deployable_target())?;
 
-    copy_dir_all(mycelia_app_assets_target(), deployable_target())?;
+    let app_name: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt("Your app name")
+        .interact_text()
+        .unwrap();
 
-    let npm = env::var("PNPM").unwrap_or_else(|_| "pnpm".to_string());
+    let r = scaffold_next(app_name).await;
 
-    // TODO run `npx create-next-app@latest` with some prompted values like
-    // (name, use ts, eslint, tw, etc) in stead
-    // TODO: see if you can use the App Router in stead
+    return Ok(());
+}
 
-    let status = std::process::Command::new(npm)
-        .current_dir(deployable_target())
-        .args(&["install"])
-        .status()?;
+async fn scaffold_next(app_name: String) -> Result<(), NewProjectError> {
+    fs::create_dir_all(&deployable_target());
+    let (send, recv) = channel::<()>();
+    let cargo = env::var("NPX").unwrap_or_else(|_| "npx".to_string());
+    let mut npx_cmd = Command::new(cargo)
+        .current_dir(&deployable_target())
+        .args(&[
+            "create-next-app@latest",
+            app_name.as_str(),
+            "--name=blabli",
+            "--typescript",
+            "--eslint",
+            "--tailwind",
+            "--src-dir",
+            "--no-app",
+            "--no-import-alias",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Unable to spawn npm/npx process");
 
-    if !status.success() {
-        return Err(format!(
-            "`npm init` failed.
+    tokio::spawn(async move { send.send(()) });
+    tokio::select! {
+        wait = npx_cmd.wait() => trace!("wait {wait:#?}"),
+        recv = recv => {
+            match recv {
+                Ok(_) => {
+                    println!("OKAY");
+                }
+                Err(error) => {
+                    println!("🪵 [main.rs:592]~ token ~ \x1b[0;32merror\x1b[0m = {}", error);
+                }
+            }
 
-Status code: {}",
-            status
-                .code()
-                .expect("Initializing new Mycelia project failed: no status")
-        ))?;
+            // npx_cmd.kill().await.expect("kill failed")
+        }
     }
 
     return Ok(());
@@ -735,20 +769,6 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
     }
 
     return Ok(());
-}
-
-fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    fs::create_dir_all(&dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        } else {
-            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        }
-    }
-    Ok(())
 }
 
 fn project_root() -> PathBuf {
