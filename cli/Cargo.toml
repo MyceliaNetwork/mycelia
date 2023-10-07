@@ -30,6 +30,7 @@ function_service = { path = "../services/function" }
 xtask = { path = "../xtask" }
 rustwrap = "1.0.5"
 version-compare = { workspace = true }
+dialoguer = "0.11.0"
 
 [build-dependencies]
 tonic-build = "0.10.0"
