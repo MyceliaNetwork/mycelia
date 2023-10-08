@@ -93,6 +93,38 @@ Status code: {status:?}"
     )]
     BuildWorkspace { status: i32 },
     #[error(
+        "`git branch releases/{version:?}` failed.
+
+Status code: {status:?}"
+    )]
+    GitCreateBranch { version: String, status: i32 },
+    #[error(
+        "`git switch releases/{version:?}` failed.
+
+Status code: {status:?}"
+    )]
+    GitSwitchBranch { status: i32, version: String },
+    #[error(
+        "`git add .` failed.
+
+Status code: {status:?}"
+    )]
+    GitAddAll { status: i32 },
+    #[error(
+        "`commit -m \"Release {version:?}\"` failed.
+
+Status code: {status:?}"
+    )]
+    GitCommit { version: String, status: i32 },
+
+    #[error(
+        "`git push origin -u releases/{version:?}` failed.
+
+Status code: {status:?}"
+    )]
+    GitPushBranch { version: String, status: i32 },
+
+    #[error(
         "`rustwrap --tag {version:?}` failed.
 
 Status code: {status:?}"
@@ -361,14 +393,108 @@ async fn try_release() -> Result<(), ReleaseError> {
 
 async fn build_workspace_release() -> Result<(), ReleaseError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let status = Command::new(cargo)
+    let cargo_build = Command::new(cargo)
         .current_dir(project_root())
         .args(&["build", "--workspace", "--release"])
         .status();
 
-    if status.is_err() {
+    if cargo_build.is_err() {
         return Err(ReleaseError::BuildWorkspace {
-            status: status.unwrap().code().unwrap_or(-1),
+            status: cargo_build.unwrap().code().unwrap_or(-1),
+        });
+    }
+
+    return Ok(());
+}
+// ReleaseError::GitCreateBranch
+// ReleaseError::GitSwitchBranch
+// ReleaseError::GitAddAll
+// ReleaseError::GitCommit
+// ReleaseError::GitPushBranch
+
+async fn git_create_branch(version: String) -> Result<(), ReleaseError> {
+    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let create_branch = Command::new(git)
+        .current_dir(project_root())
+        .args(&["branch", format!("releases/{}", version).as_str()])
+        .status();
+
+    if create_branch.is_err() {
+        return Err(ReleaseError::GitCreateBranch {
+            version,
+            status: create_branch.unwrap().code().unwrap_or(-1),
+        });
+    }
+
+    return Ok(());
+}
+
+async fn git_switch_branch(version: String) -> Result<(), ReleaseError> {
+    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let switch_branch = Command::new(git)
+        .current_dir(project_root())
+        .args(&["switch", format!("releases/{}", version).as_str()])
+        .status();
+
+    if switch_branch.is_err() {
+        return Err(ReleaseError::GitSwitchBranch {
+            version,
+            status: switch_branch.unwrap().code().unwrap_or(-1),
+        });
+    }
+
+    return Ok(());
+}
+
+async fn git_add_all() -> Result<(), ReleaseError> {
+    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let add_all = Command::new(git)
+        .current_dir(project_root())
+        .args(&["add", "."])
+        .status();
+
+    if add_all.is_err() {
+        return Err(ReleaseError::GitAddAll {
+            status: add_all.unwrap().code().unwrap_or(-1),
+        });
+    }
+
+    return Ok(());
+}
+
+async fn git_commit(version: String) -> Result<(), ReleaseError> {
+    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let commit = Command::new(git)
+        .current_dir(project_root())
+        .args(&["commit", "-m", format!("Release {}", version).as_str()])
+        .status();
+
+    if commit.is_err() {
+        return Err(ReleaseError::GitCommit {
+            status: commit.unwrap().code().unwrap_or(-1),
+            version,
+        });
+    }
+
+    return Ok(());
+}
+
+async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
+    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let push_branch = Command::new(git)
+        .current_dir(project_root())
+        .args(&[
+            "push",
+            "-u",
+            "origin",
+            format!("releases/{}", version).as_str(),
+        ])
+        .status();
+
+    if push_branch.is_err() {
+        return Err(ReleaseError::GitPushBranch {
+            status: push_branch.unwrap().code().unwrap_or(-1),
+            version,
         });
     }
 

@@ -544,23 +544,25 @@ async fn new() -> Result<(), DynError> {
     return Ok(());
 }
 
-async fn try_new() -> Result<(), DynError> {
+async fn try_new() -> Result<(), NewProjectError> {
     info!("Creating new Mycelia project");
 
-    fs::create_dir_all(&deployable_target())?;
+    let _ = fs::create_dir_all(&deployable_target());
 
     let app_name: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Your app name")
         .interact_text()
         .unwrap();
 
-    let r = scaffold_next(app_name).await;
+    if let Err(error) = scaffold_next(app_name).await {
+        return Err(error);
+    }
 
     return Ok(());
 }
 
 async fn scaffold_next(app_name: String) -> Result<(), NewProjectError> {
-    fs::create_dir_all(&deployable_target());
+    let _ = fs::create_dir_all(&deployable_target());
     let (send, recv) = channel::<()>();
     let cargo = env::var("NPX").unwrap_or_else(|_| "npx".to_string());
     let mut npx_cmd = Command::new(cargo)
@@ -781,8 +783,4 @@ fn project_root() -> PathBuf {
 
 fn deployable_target() -> PathBuf {
     project_root().join("deployable")
-}
-
-fn mycelia_app_assets_target() -> PathBuf {
-    project_root().join("cli/static/mycelia-app")
 }
