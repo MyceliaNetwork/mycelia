@@ -116,14 +116,18 @@ Status code: {status:?}"
 Status code: {status:?}"
     )]
     GitCommit { version: String, status: i32 },
-
     #[error(
         "`git push origin -u releases/{version:?}` failed.
 
 Status code: {status:?}"
     )]
     GitPushBranch { version: String, status: i32 },
+    #[error(
+        "`gh pr create --fill --label release --assignee @me --title \"Release {}\"` failed.
 
+Status code: {status:?}"
+    )]
+    GitHubCreatePullRequest { version: String, status: i32 },
     #[error(
         "`rustwrap --tag {version:?}` failed.
 
@@ -493,6 +497,33 @@ async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
 
     if push_branch.is_err() {
         return Err(ReleaseError::GitPushBranch {
+            status: push_branch.unwrap().code().unwrap_or(-1),
+            version,
+        });
+    }
+
+    return Ok(());
+}
+
+async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
+    let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+    let create_pr = Command::new(git)
+        .current_dir(project_root())
+        .args(&[
+            "pr",
+            "create",
+            "--fill",
+            "--label",
+            "release",
+            "--assignee",
+            "@me",
+            "--title",
+            format!("Release {}", version).as_str(),
+        ])
+        .status();
+
+    if create_pr.is_err() {
+        return Err(ReleaseError::GitHubCreatePullRequest {
             status: push_branch.unwrap().code().unwrap_or(-1),
             version,
         });
