@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, Input};
 use log::{debug, error, info, trace, warn};

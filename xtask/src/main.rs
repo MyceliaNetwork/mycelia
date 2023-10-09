@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 use log::{error, info};
 
 use std::{
@@ -157,7 +158,8 @@ async fn try_main() -> Result<(), DynError> {
         Some("publish") => publish()?,
         _ => print_help(),
     }
-    return Ok(());
+
+    Ok(())
 }
 
 fn print_help() {
@@ -214,6 +216,7 @@ fn guests() -> Vec<Guest> {
     guests_filtered.sort_by(|a, b| {
         let a = priority.iter().position(|p| p == &a.name).unwrap_or(0);
         let b = priority.iter().position(|p| p == &b.name).unwrap_or(0);
+
         if a > b {
             return Ordering::Greater;
         } else if a < b {
@@ -243,7 +246,7 @@ fn build_workspace() -> Result<(), BuildError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
-        .args(&["build", "--workspace"])
+        .args(["build", "--workspace"])
         .status();
 
     if !status.as_ref().unwrap().success() {
@@ -259,7 +262,7 @@ fn build_wasm(guest: &Guest) -> Result<(), BuildError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
-        .args(&[
+        .args([
             "build",
             "--target=wasm32-wasi",
             "--release",
@@ -310,7 +313,7 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
     }
 
     let cmd_wasm_guest = path_wasm_guest.display().to_string();
-    let cmd_wasi_snapshot = format!("--adapt={}", path_wasi_snapshot.display().to_string());
+    let cmd_wasi_snapshot = format!("--adapt={}", path_wasi_snapshot.display());
     let cmd_component_output = format!(
         "-o={}/{}-component.wasm",
         &dir_components().display(),
@@ -319,7 +322,7 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
 
     let status = Command::new(wasm_tools)
         .current_dir(project_root())
-        .args(&[
+        .args([
             "component",
             "new",
             &cmd_wasm_guest,
@@ -332,8 +335,8 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
         let guest = guest.clone();
         return Err(BuildError::CommandFailed {
             guest_name: guest.name,
-            path_wasm_guest: path_wasm_guest,
-            path_wasi_snapshot: path_wasi_snapshot,
+            path_wasm_guest,
+            path_wasi_snapshot,
             dir_components: dir_components(),
             guest_path: guest.path,
             status: status.unwrap().code().unwrap_or(-1),
@@ -348,7 +351,8 @@ async fn release() -> Result<(), ReleaseError> {
         eprintln!("{error:#}");
         std::process::exit(-1);
     }
-    return Ok(());
+
+    Ok(())
 }
 
 async fn try_release() -> Result<(), ReleaseError> {
@@ -387,26 +391,29 @@ async fn try_release() -> Result<(), ReleaseError> {
         _ => {}
     }
 
-    build_workspace_release().await?;
-    release_git(version_arg_val.clone().unwrap()).await?;
+    bump_version(version_arg_val.clone().unwrap());
+    build_workspace_release()?;
+    release_git(version_arg_val.unwrap()).await?;
 
-    return Ok(());
+    Ok(())
 }
 
-async fn build_workspace_release() -> Result<(), ReleaseError> {
+fn bump_version(version: String) {
+    todo!("bump version in Cargo.tomls across workspace");
+}
+
+fn build_workspace_release() -> Result<(), ReleaseError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let cargo_build = Command::new(cargo)
         .current_dir(project_root())
-        .args(&["build", "--workspace", "--release"])
-        .status();
+        .args(["build", "--workspace", "--release"])
+        .status()
+        .expect("Failed to build workspace");
 
-    if cargo_build.is_err() {
-        return Err(ReleaseError::BuildWorkspace {
-            status: cargo_build.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    return Ok(());
+    return match cargo_build.code() {
+        Some(code) => Err(ReleaseError::BuildWorkspace { status: code }),
+        None => Ok(()),
+    };
 }
 
 async fn release_git(version: String) -> Result<(), ReleaseError> {
@@ -415,31 +422,31 @@ async fn release_git(version: String) -> Result<(), ReleaseError> {
     git_push_branch(version.clone()).await?;
     github_create_pr(version.clone()).await?;
 
-    return Ok(());
+    Ok(())
 }
 
 async fn git_create_branch(version: String) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let create_branch = Command::new(git)
         .current_dir(project_root())
-        .args(&["branch", format!("releases/{}", version).as_str()])
-        .status();
+        .args(["branch", format!("releases/{}", version).as_str()])
+        .status()
+        .expect("Failed to create git branch");
 
-    if create_branch.is_err() {
-        return Err(ReleaseError::GitCreateBranch {
+    return match create_branch.code() {
+        Some(code) => Err(ReleaseError::GitCreateBranch {
             version,
-            status: create_branch.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    return Ok(());
+            status: code,
+        }),
+        None => Ok(()),
+    };
 }
 
 async fn git_switch_branch(version: String) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let switch_branch = Command::new(git)
         .current_dir(project_root())
-        .args(&["switch", format!("releases/{}", version).as_str()])
+        .args(["switch", format!("releases/{}", version).as_str()])
         .status();
 
     if switch_branch.is_err() {
@@ -449,14 +456,14 @@ async fn git_switch_branch(version: String) -> Result<(), ReleaseError> {
         });
     }
 
-    return Ok(());
+    Ok(())
 }
 
 async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let push_branch = Command::new(git)
         .current_dir(project_root())
-        .args(&[
+        .args([
             "push",
             "-u",
             "origin",
@@ -471,14 +478,14 @@ async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
         });
     }
 
-    return Ok(());
+    Ok(())
 }
 
 async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
     let create_pr = Command::new(github)
         .current_dir(project_root())
-        .args(&[
+        .args([
             "pr",
             "create",
             "--fill",
@@ -499,14 +506,14 @@ async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
         });
     }
 
-    return Ok(());
+    Ok(())
 }
 
 fn github_release(version: String) -> Result<(), PublishError> {
     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
     let create_release = Command::new(github)
         .current_dir(project_root())
-        .args(&[
+        .args([
             "release",
             "create",
             "--prerelease", // TODO: remove this flag when we are ready for a stable release
@@ -521,7 +528,7 @@ fn github_release(version: String) -> Result<(), PublishError> {
         });
     }
 
-    return Ok(());
+    Ok(())
 }
 
 fn publish() -> Result<(), PublishError> {
@@ -530,7 +537,7 @@ fn publish() -> Result<(), PublishError> {
         std::process::exit(-1);
     }
 
-    return Ok(());
+    Ok(())
 }
 
 fn try_publish() -> Result<(), PublishError> {
@@ -551,7 +558,7 @@ fn try_publish() -> Result<(), PublishError> {
     github_release(version_arg_val.clone().unwrap())?;
     publish_pkg(version_arg_val.unwrap())?;
 
-    return Ok(());
+    Ok(())
 }
 
 fn publish_pkg(version: String) -> Result<(), PublishError> {
@@ -559,7 +566,7 @@ fn publish_pkg(version: String) -> Result<(), PublishError> {
 
     let status = Command::new(rustwrap)
         .current_dir(project_root())
-        .args(&[format!("--tag"), version.clone()])
+        .args(["--tag", version.as_str()])
         .status();
 
     if !status.as_ref().unwrap().success() {
@@ -569,7 +576,7 @@ fn publish_pkg(version: String) -> Result<(), PublishError> {
         });
     }
 
-    return Ok(());
+    Ok(())
 }
 
 fn project_root() -> PathBuf {
