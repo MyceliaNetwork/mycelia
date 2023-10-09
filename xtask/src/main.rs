@@ -105,18 +105,6 @@ Status code: {status:}"
     )]
     GitSwitchBranch { status: i32, version: String },
     #[error(
-        "`git add .` failed.
-
-Status code: {status:}"
-    )]
-    GitAddAll { status: i32 },
-    #[error(
-        "`commit -m \"Release {version:}\"` failed.
-
-Status code: {status:}"
-    )]
-    GitCommit { version: String, status: i32 },
-    #[error(
         "`git push origin -u releases/{version:}` failed.
 
 Status code: {status:}"
@@ -128,6 +116,20 @@ Status code: {status:}"
 Status code: {status:}"
     )]
     GitHubCreatePullRequest { version: String, status: i32 },
+}
+
+#[derive(Debug, Error)]
+enum PublishError {
+    #[error("missing --version argument. Example: `--version 1.2.3`")]
+    MissingVersionArg,
+    #[error("missing --version value. Example: `--version 1.2.3`")]
+    MissingVersionVal,
+    #[error(
+        "`gh release create --prerelease --generate-notes` failed.
+
+Status code {status:?}"
+    )]
+    GitHub { version: String, status: i32 },
     #[error(
         "`rustwrap --tag {version:}` failed.
 
@@ -151,14 +153,8 @@ async fn try_main() -> Result<(), DynError> {
 
     match task.as_deref() {
         Some("build") => build()?,
-        Some("release") => match release().await {
-            Err(e) => {
-                return Err(Box::new(e));
-            }
-            Ok(_) => {}
-        },
-        // Some("release-git") => match release_git().await?,
-        // Some("release-pkg") => match release_pkg().await?,
+        Some("release") => release().await?,
+        Some("publish") => publish()?,
         _ => print_help(),
     }
     return Ok(());
@@ -393,7 +389,6 @@ async fn try_release() -> Result<(), ReleaseError> {
 
     build_workspace_release().await?;
     release_git(version_arg_val.clone().unwrap()).await?;
-    rustwrap(version_arg_val.unwrap()).await?;
 
     return Ok(());
 }
@@ -417,8 +412,6 @@ async fn build_workspace_release() -> Result<(), ReleaseError> {
 async fn release_git(version: String) -> Result<(), ReleaseError> {
     git_create_branch(version.clone()).await?;
     git_switch_branch(version.clone()).await?;
-    // git_add_all().await?;
-    // git_commit(version.clone()).await?;
     git_push_branch(version.clone()).await?;
     github_create_pr(version.clone()).await?;
 
@@ -453,39 +446,6 @@ async fn git_switch_branch(version: String) -> Result<(), ReleaseError> {
         return Err(ReleaseError::GitSwitchBranch {
             version,
             status: switch_branch.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    return Ok(());
-}
-
-async fn git_add_all() -> Result<(), ReleaseError> {
-    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-    let add_all = Command::new(git)
-        .current_dir(project_root())
-        .args(&["add", "."])
-        .status();
-
-    if add_all.is_err() {
-        return Err(ReleaseError::GitAddAll {
-            status: add_all.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    return Ok(());
-}
-
-async fn git_commit(version: String) -> Result<(), ReleaseError> {
-    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-    let commit = Command::new(git)
-        .current_dir(project_root())
-        .args(&["commit", "-m", format!("Release {}", version).as_str()])
-        .status();
-
-    if commit.is_err() {
-        return Err(ReleaseError::GitCommit {
-            status: commit.unwrap().code().unwrap_or(-1),
-            version,
         });
     }
 
@@ -542,7 +502,59 @@ async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
     return Ok(());
 }
 
-async fn rustwrap(version: String) -> Result<(), ReleaseError> {
+fn github_release(version: String) -> Result<(), PublishError> {
+    let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+    let create_release = Command::new(github)
+        .current_dir(project_root())
+        .args(&[
+            "release",
+            "create",
+            "--prerelease", // TODO: remove this flag when we are ready for a stable release
+            "--generate-notes",
+        ])
+        .status();
+
+    if create_release.is_err() {
+        return Err(PublishError::GitHub {
+            version,
+            status: create_release.unwrap().code().unwrap_or(-1),
+        });
+    }
+
+    return Ok(());
+}
+
+fn publish() -> Result<(), PublishError> {
+    if let Err(error) = try_publish() {
+        eprintln!("{error:#}");
+        std::process::exit(-1);
+    }
+
+    return Ok(());
+}
+
+fn try_publish() -> Result<(), PublishError> {
+    let version_arg_tag = env::args().nth(2);
+    let version_arg_val = env::args().nth(3);
+    match version_arg_tag.clone() {
+        None => return Err(PublishError::MissingVersionArg),
+        Some(tag) => {
+            if tag != "--version" {
+                return Err(PublishError::MissingVersionArg);
+            }
+        }
+    }
+    if version_arg_val.clone().is_none() {
+        return Err(PublishError::MissingVersionVal);
+    }
+
+    github_release(version_arg_val.clone().unwrap())?;
+    publish_pkg(version_arg_val.unwrap())?;
+
+    return Ok(());
+}
+
+fn publish_pkg(version: String) -> Result<(), PublishError> {
     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
 
     let status = Command::new(rustwrap)
@@ -551,7 +563,7 @@ async fn rustwrap(version: String) -> Result<(), ReleaseError> {
         .status();
 
     if !status.as_ref().unwrap().success() {
-        return Err(ReleaseError::Rustwrap {
+        return Err(PublishError::Rustwrap {
             version,
             status: status.unwrap().code().unwrap_or(-1),
         });
