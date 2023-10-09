@@ -22,10 +22,10 @@ Status code: {status}"
     Workspace { status: i32 },
 
     #[error(
-        "Build wasm '{guest_name:?}' failed.
+        "Build wasm '{guest_name}' failed.
 
-Command: `cargo build --target wasm32-wasi --release --package {guest_name:?}`
-Guest path: '{guest_path:?}'
+Command: `cargo build --target wasm32-wasi --release --package {guest_name}`
+Guest path: {guest_path}
 Status code: {status}"
     )]
     Wasm {
@@ -34,18 +34,18 @@ Status code: {status}"
         status: i32,
     },
 
-    #[error("wasm guest file '{guest_name:?}' for '{guest_path:?}' does not exist")]
+    #[error("wasm guest file '{guest_name}' for '{guest_path}' does not exist")]
     GuestFileNonExistent {
         guest_name: String,
         guest_path: PathBuf,
     },
 
     #[error(
-        "Build component '{guest_name:?}' failed.
+        "Build component '{guest_name}' failed.
 
-Command: `wasm-tools component new {path_wasm_guest:?} --adapt {path_wasi_snapshot:?} -o {dir_components:?}`
-Guest path: '{guest_path:?}'
-Status code: {status:}"
+Command: `wasm-tools component new {path_wasm_guest} --adapt {path_wasi_snapshot} -o {dir_components}`
+Guest path: '{guest_path}'
+Status code: {status}"
     )]
     CommandFailed {
         guest_name: String,
@@ -56,13 +56,13 @@ Status code: {status:}"
         status: i32,
     },
 
-    #[error("wasi snapshot file '{guest_name:?}' for '{guest_path:?}' does not exist")]
+    #[error("wasi snapshot file '{guest_name}' for '{guest_path}' does not exist")]
     WasiSnapshotFileNonExistent {
         guest_name: String,
         guest_path: PathBuf,
     },
 
-    #[error("component output directory '{dir:?}' for '{guest_name:?}' does not exist")]
+    #[error("component output directory '{dir}' for '{guest_name}' does not exist")]
     DirComponentsNonExistent { dir: PathBuf, guest_name: String },
 }
 #[derive(Debug, Error)]
@@ -72,15 +72,13 @@ enum ReleaseError {
     #[error("missing --version value. Example: `--version 1.2.3`")]
     MissingVersionVal,
     #[error(
-        "argument `--version {version_input:?}` is lower than the current version {version_current:?}"
+        "argument `--version {version_input}` is lower than the current version {version_current}"
     )]
     VersionLowerThanCurrent {
         version_input: String,
         version_current: String,
     },
-    #[error(
-        "argument `--version {version_input:?}` equal to the current version {version_current:?}"
-    )]
+    #[error("argument `--version {version_input}` equal to the current version {version_current}")]
     VersionEqualToCurrent {
         version_input: String,
         version_current: String,
@@ -90,31 +88,31 @@ enum ReleaseError {
     #[error(
         "building workspace failded.
 
-Status code: {status:}"
+Status code: {status}"
     )]
     BuildWorkspace { status: i32 },
     #[error(
-        "`git branch releases/{version:}` failed.
+        "`git branch releases/{version}` failed.
 
-Status code: {status:}"
+Status code: {status}"
     )]
     GitCreateBranch { version: String, status: i32 },
     #[error(
-        "`git switch releases/{version:}` failed.
+        "`git switch releases/{version}` failed.
 
-Status code: {status:}"
+Status code: {status}"
     )]
     GitSwitchBranch { status: i32, version: String },
     #[error(
-        "`git push origin -u releases/{version:}` failed.
+        "`git push origin -u releases/{version}` failed.
 
-Status code: {status:}"
+Status code: {status}"
     )]
     GitPushBranch { version: String, status: i32 },
     #[error(
-        "`gh pr create --fill --base releases/{version:} --assignee @me --title \"Release {version:}\"` failed.
+        "`gh pr create --fill --base releases/{version} --assignee @me --title \"Release {version}\"` failed.
 
-Status code: {status:}"
+Status code: {status}"
     )]
     GitHubCreatePullRequest { version: String, status: i32 },
 }
@@ -128,13 +126,13 @@ enum PublishError {
     #[error(
         "`gh release create --prerelease --generate-notes` failed.
 
-Status code {status:?}"
+Status code {status}"
     )]
     GitHub { version: String, status: i32 },
     #[error(
-        "`rustwrap --tag {version:}` failed.
+        "`rustwrap --tag {version}` failed.
 
-Status code: {status:}"
+Status code: {status}"
     )]
     Rustwrap { version: String, status: i32 },
 }
@@ -143,6 +141,12 @@ type DynError = Box<dyn std::error::Error>;
 
 #[tokio::main]
 async fn main() {
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info")
+    }
+
+    env_logger::init();
+
     if let Err(error) = try_main().await {
         error!("{error:#}");
         std::process::exit(-1);
@@ -153,9 +157,9 @@ async fn try_main() -> Result<(), DynError> {
     let task = env::args().nth(1);
 
     match task.as_deref() {
-        Some("build") => build()?,
+        Some("build") => build().await?,
         Some("release") => release().await?,
-        Some("publish") => publish()?,
+        Some("publish") => publish().await?,
         _ => print_help(),
     }
 
@@ -166,9 +170,9 @@ fn print_help() {
     info!(
         "Tasks:
 
-wasm            build wasm using wasm32-wasi target
-components      build components using wasm-tools
-"
+build    Build all guests and components
+release  Release a new version
+publish  Publish a new version"
     )
 }
 
@@ -217,19 +221,17 @@ fn guests() -> Vec<Guest> {
         let a = priority.iter().position(|p| p == &a.name).unwrap_or(0);
         let b = priority.iter().position(|p| p == &b.name).unwrap_or(0);
 
-        if a > b {
-            return Ordering::Greater;
-        } else if a < b {
-            return Ordering::Less;
-        } else {
-            return Ordering::Equal;
-        }
+        return match a.cmp(&b) {
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Equal => Ordering::Equal,
+        };
     });
 
     return guests_filtered;
 }
 
-fn build() -> Result<(), DynError> {
+async fn build() -> Result<(), DynError> {
     fs::create_dir_all(&dir_target())?;
     fs::create_dir_all(&dir_components())?;
 
@@ -247,20 +249,19 @@ fn build_workspace() -> Result<(), BuildError> {
     let status = Command::new(cargo)
         .current_dir(project_root())
         .args(["build", "--workspace"])
-        .status();
+        .status()
+        .expect("Failed to build workspace");
 
-    if !status.as_ref().unwrap().success() {
-        return Err(BuildError::Workspace {
-            status: status.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    Ok(())
+    return match status.code() {
+        Some(0) => Ok(()),
+        Some(code) => Err(BuildError::Workspace { status: code }),
+        None => Ok(()),
+    };
 }
 
 fn build_wasm(guest: &Guest) -> Result<(), BuildError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let status = Command::new(cargo)
+    let build_wasm = Command::new(cargo)
         .current_dir(project_root())
         .args([
             "build",
@@ -268,18 +269,21 @@ fn build_wasm(guest: &Guest) -> Result<(), BuildError> {
             "--release",
             &format!("--package={}", guest.name_output),
         ])
-        .status();
+        .status()
+        .expect("Failed to build wasm guest");
 
-    if !status.as_ref().unwrap().success() {
-        let guest = guest.clone();
-        return Err(BuildError::Wasm {
-            guest_name: guest.name,
-            guest_path: guest.path,
-            status: status.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    Ok(())
+    return match build_wasm.code() {
+        Some(0) => Ok(()),
+        Some(status) => {
+            let guest = guest.clone();
+            Err(BuildError::Wasm {
+                guest_name: guest.name,
+                guest_path: guest.path,
+                status,
+            })
+        }
+        None => Ok(()),
+    };
 }
 
 fn build_component(guest: &Guest) -> Result<(), BuildError> {
@@ -320,7 +324,7 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
         guest.name
     );
 
-    let status = Command::new(wasm_tools)
+    let wasm_tools = Command::new(wasm_tools)
         .current_dir(project_root())
         .args([
             "component",
@@ -329,21 +333,24 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
             &cmd_wasi_snapshot,
             &cmd_component_output,
         ])
-        .status();
+        .status()
+        .expect("Failed to build component with wasm_tools");
 
-    if !status.as_ref().unwrap().success() {
-        let guest = guest.clone();
-        return Err(BuildError::CommandFailed {
-            guest_name: guest.name,
-            path_wasm_guest,
-            path_wasi_snapshot,
-            dir_components: dir_components(),
-            guest_path: guest.path,
-            status: status.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    Ok(())
+    return match wasm_tools.code() {
+        Some(0) => Ok(()),
+        Some(status) => {
+            let guest = guest.clone();
+            return Err(BuildError::CommandFailed {
+                guest_name: guest.name,
+                path_wasm_guest,
+                path_wasi_snapshot,
+                dir_components: dir_components(),
+                guest_path: guest.path,
+                status,
+            });
+        }
+        None => Ok(()),
+    };
 }
 
 async fn release() -> Result<(), ReleaseError> {
@@ -398,8 +405,8 @@ async fn try_release() -> Result<(), ReleaseError> {
     Ok(())
 }
 
-fn bump_version(version: String) {
-    todo!("bump version in Cargo.tomls across workspace");
+fn bump_version(_version: String) {
+    println!("bump version in Cargo.tomls across workspace");
 }
 
 fn build_workspace_release() -> Result<(), ReleaseError> {
@@ -434,10 +441,8 @@ async fn git_create_branch(version: String) -> Result<(), ReleaseError> {
         .expect("Failed to create git branch");
 
     return match create_branch.code() {
-        Some(code) => Err(ReleaseError::GitCreateBranch {
-            version,
-            status: code,
-        }),
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::GitCreateBranch { version, status }),
         None => Ok(()),
     };
 }
@@ -447,16 +452,14 @@ async fn git_switch_branch(version: String) -> Result<(), ReleaseError> {
     let switch_branch = Command::new(git)
         .current_dir(project_root())
         .args(["switch", format!("releases/{}", version).as_str()])
-        .status();
+        .status()
+        .expect("Failed to switch git branch");
 
-    if switch_branch.is_err() {
-        return Err(ReleaseError::GitSwitchBranch {
-            version,
-            status: switch_branch.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    Ok(())
+    return match switch_branch.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::GitSwitchBranch { version, status }),
+        None => Ok(()),
+    };
 }
 
 async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
@@ -469,16 +472,14 @@ async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
             "origin",
             format!("releases/{}", version).as_str(),
         ])
-        .status();
+        .status()
+        .expect("Failed to push git branch");
 
-    if push_branch.is_err() {
-        return Err(ReleaseError::GitPushBranch {
-            status: push_branch.unwrap().code().unwrap_or(-1),
-            version,
-        });
-    }
-
-    Ok(())
+    return match push_branch.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::GitPushBranch { status, version }),
+        None => Ok(()),
+    };
 }
 
 async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
@@ -497,16 +498,14 @@ async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
             format!("Release {}", version).as_str(),
             "",
         ])
-        .status();
+        .status()
+        .expect("Failed to create GitHub pull request");
 
-    if create_pr.is_err() {
-        return Err(ReleaseError::GitHubCreatePullRequest {
-            status: create_pr.unwrap().code().unwrap_or(-1),
-            version,
-        });
-    }
-
-    Ok(())
+    return match create_pr.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::GitHubCreatePullRequest { status, version }),
+        None => Ok(()),
+    };
 }
 
 fn github_release(version: String) -> Result<(), PublishError> {
@@ -519,19 +518,17 @@ fn github_release(version: String) -> Result<(), PublishError> {
             "--prerelease", // TODO: remove this flag when we are ready for a stable release
             "--generate-notes",
         ])
-        .status();
+        .status()
+        .expect("Failed to create GitHub release");
 
-    if create_release.is_err() {
-        return Err(PublishError::GitHub {
-            version,
-            status: create_release.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    Ok(())
+    return match create_release.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(PublishError::GitHub { version, status }),
+        None => Ok(()),
+    };
 }
 
-fn publish() -> Result<(), PublishError> {
+async fn publish() -> Result<(), PublishError> {
     if let Err(error) = try_publish() {
         eprintln!("{error:#}");
         std::process::exit(-1);
@@ -564,19 +561,17 @@ fn try_publish() -> Result<(), PublishError> {
 fn publish_pkg(version: String) -> Result<(), PublishError> {
     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
 
-    let status = Command::new(rustwrap)
+    let rustwrap = Command::new(rustwrap)
         .current_dir(project_root())
         .args(["--tag", version.as_str()])
-        .status();
+        .status()
+        .expect("Failed to publish package");
 
-    if !status.as_ref().unwrap().success() {
-        return Err(PublishError::Rustwrap {
-            version,
-            status: status.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    Ok(())
+    return match rustwrap.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(PublishError::Rustwrap { version, status }),
+        None => Ok(()),
+    };
 }
 
 fn project_root() -> PathBuf {
