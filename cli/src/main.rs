@@ -76,8 +76,8 @@ enum DeploymentError {
 enum NewProjectError {
     #[error("npm/npx not found")]
     NpmNotFound,
-    #[error("npm init failed. Status code: {status:?}")]
-    NpmInitFailed { status: i32 },
+    #[error("npx create-next-app failed. Status code: {status:}")]
+    CreateNextAppFailed { status: i32 },
 }
 
 #[derive(Debug, Error)]
@@ -581,7 +581,7 @@ async fn scaffold_next(app_name: String) -> Result<(), NewProjectError> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("Unable to spawn npm/npx process");
+        .expect("npx create-next-app failed");
 
     tokio::spawn(async move { send.send(()) });
     tokio::select! {
@@ -595,8 +595,6 @@ async fn scaffold_next(app_name: String) -> Result<(), NewProjectError> {
                     println!("🪵 [main.rs:592]~ token ~ \x1b[0;32merror\x1b[0m = {}", error);
                 }
             }
-
-            // npx_cmd.kill().await.expect("kill failed")
         }
     }
 

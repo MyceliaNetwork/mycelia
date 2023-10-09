@@ -44,7 +44,7 @@ Status code: {status}"
 
 Command: `wasm-tools component new {path_wasm_guest:?} --adapt {path_wasi_snapshot:?} -o {dir_components:?}`
 Guest path: '{guest_path:?}'
-Status code: {status:?}"
+Status code: {status:}"
     )]
     CommandFailed {
         guest_name: String,
@@ -89,49 +89,49 @@ enum ReleaseError {
     #[error(
         "building workspace failded.
 
-Status code: {status:?}"
+Status code: {status:}"
     )]
     BuildWorkspace { status: i32 },
     #[error(
-        "`git branch releases/{version:?}` failed.
+        "`git branch releases/{version:}` failed.
 
-Status code: {status:?}"
+Status code: {status:}"
     )]
     GitCreateBranch { version: String, status: i32 },
     #[error(
-        "`git switch releases/{version:?}` failed.
+        "`git switch releases/{version:}` failed.
 
-Status code: {status:?}"
+Status code: {status:}"
     )]
     GitSwitchBranch { status: i32, version: String },
     #[error(
         "`git add .` failed.
 
-Status code: {status:?}"
+Status code: {status:}"
     )]
     GitAddAll { status: i32 },
     #[error(
-        "`commit -m \"Release {version:?}\"` failed.
+        "`commit -m \"Release {version:}\"` failed.
 
-Status code: {status:?}"
+Status code: {status:}"
     )]
     GitCommit { version: String, status: i32 },
     #[error(
-        "`git push origin -u releases/{version:?}` failed.
+        "`git push origin -u releases/{version:}` failed.
 
-Status code: {status:?}"
+Status code: {status:}"
     )]
     GitPushBranch { version: String, status: i32 },
     #[error(
-        "`gh pr create --fill --label release --assignee @me --title \"Release {}\"` failed.
+        "`gh pr create --fill --base releases/{version:} --assignee @me --title \"Release {version:}\"` failed.
 
-Status code: {status:?}"
+Status code: {status:}"
     )]
     GitHubCreatePullRequest { version: String, status: i32 },
     #[error(
-        "`rustwrap --tag {version:?}` failed.
+        "`rustwrap --tag {version:}` failed.
 
-Status code: {status:?}"
+Status code: {status:}"
     )]
     Rustwrap { version: String, status: i32 },
 }
@@ -157,6 +157,8 @@ async fn try_main() -> Result<(), DynError> {
             }
             Ok(_) => {}
         },
+        // Some("release-git") => match release_git().await?,
+        // Some("release-pkg") => match release_pkg().await?,
         _ => print_help(),
     }
     return Ok(());
@@ -390,6 +392,7 @@ async fn try_release() -> Result<(), ReleaseError> {
     }
 
     build_workspace_release().await?;
+    release_git(version_arg_val.clone().unwrap()).await?;
     rustwrap(version_arg_val.unwrap()).await?;
 
     return Ok(());
@@ -410,11 +413,17 @@ async fn build_workspace_release() -> Result<(), ReleaseError> {
 
     return Ok(());
 }
-// ReleaseError::GitCreateBranch
-// ReleaseError::GitSwitchBranch
-// ReleaseError::GitAddAll
-// ReleaseError::GitCommit
-// ReleaseError::GitPushBranch
+
+async fn release_git(version: String) -> Result<(), ReleaseError> {
+    git_create_branch(version.clone()).await?;
+    git_switch_branch(version.clone()).await?;
+    // git_add_all().await?;
+    // git_commit(version.clone()).await?;
+    git_push_branch(version.clone()).await?;
+    github_create_pr(version.clone()).await?;
+
+    return Ok(());
+}
 
 async fn git_create_branch(version: String) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
@@ -507,24 +516,25 @@ async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
 
 async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-    let create_pr = Command::new(git)
+    let create_pr = Command::new(github)
         .current_dir(project_root())
         .args(&[
             "pr",
             "create",
             "--fill",
-            "--label",
-            "release",
             "--assignee",
             "@me",
+            "--base",
+            format!("releases/{}", version).as_str(),
             "--title",
             format!("Release {}", version).as_str(),
+            "",
         ])
         .status();
 
     if create_pr.is_err() {
         return Err(ReleaseError::GitHubCreatePullRequest {
-            status: push_branch.unwrap().code().unwrap_or(-1),
+            status: create_pr.unwrap().code().unwrap_or(-1),
             version,
         });
     }
