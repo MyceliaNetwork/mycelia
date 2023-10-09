@@ -757,19 +757,23 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
     }
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let status = std::process::Command::new(cargo)
+    let release_process = std::process::Command::new(cargo)
         .current_dir(project_root())
         .args(&["xtask", "release", "--version", version_arg_val])
-        .status();
+        .status()
+        .expect("Unable to spawn release process");
 
-    if status.is_err() {
-        return Err(ReleaseError::XtaskReleaseFailed {
+    return match release_process.code() {
+        Some(0) => Ok(()),
+        Some(code) => Err(ReleaseError::XtaskReleaseFailed {
             version: version_arg_val.clone(),
-            status: status.unwrap().code().unwrap_or(-1),
-        });
-    }
-
-    return Ok(());
+            status: code,
+        }),
+        None => Err(ReleaseError::XtaskReleaseFailed {
+            version: version_arg_val.clone(),
+            status: -1,
+        }),
+    };
 }
 
 fn project_root() -> PathBuf {
