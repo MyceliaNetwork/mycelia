@@ -740,14 +740,14 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
         Ok(version_arg_val) => match version_arg_val.cmp(&version_current) {
             Ordering::Greater => {
                 return Err(ReleaseError::CurrentVersionGreater {
-                    input: version_arg_val.clone(),
                     current: version_current,
+                    input: version_arg_val.clone(),
                 });
             }
             Ordering::Equal => {
                 return Err(ReleaseError::CurrentVersionEqual {
-                    input: version_arg_val.clone(),
                     current: version_current,
+                    input: version_arg_val.clone(),
                 });
             }
             Ordering::Less => {

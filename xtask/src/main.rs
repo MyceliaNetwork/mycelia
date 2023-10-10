@@ -59,14 +59,6 @@ Status code: {status}"
 }
 #[derive(Debug, Error)]
 enum ReleaseError {
-    #[error("missing --version argument. Example: `--version 1.2.3`")]
-    MissingVersionArg,
-    #[error("version parsing error. Cause: {cause}")]
-    VersionParsingError { cause: semver::Error },
-    #[error("current version {current} is greater than argument `--version {input}`")]
-    CurrentVersionGreater { input: Version, current: Version },
-    #[error("current version {current} is equal to argument `--version {input}`")]
-    CurrentVersionEqual { input: Version, current: Version },
     #[error("building workspace failded. Status code: {status}")]
     BuildWorkspace { status: i32 },
     #[error("`git branch releases/{version}` failed. Status code: {status}")]
@@ -114,6 +106,7 @@ async fn try_main() -> Result<(), DynError> {
         Some("build") => build().await?,
         Some("release") => release().await?,
         Some("publish") => publish().await?,
+        Some("bump") => bump().await?,
         _ => print_help(),
     }
 
@@ -318,58 +311,34 @@ async fn release() -> Result<(), ReleaseError> {
 }
 
 async fn try_release() -> Result<(), ReleaseError> {
-    let version_current: &str = env!("CARGO_PKG_VERSION");
-    let version_arg_tag = env::args().nth(2);
-    let version_arg_val = env::args().nth(3);
-    match version_arg_tag.clone() {
-        None => return Err(ReleaseError::MissingVersionArg),
-        Some(tag) => {
-            if tag != "--version" {
-                return Err(ReleaseError::MissingVersionArg);
-            }
-        }
-    }
+    bump().await?;
 
-    let version_current = Version::parse(version_current);
-    if let Err(cause) = version_current {
-        return Err(ReleaseError::VersionParsingError { cause });
-    }
-    let version_current = version_current.unwrap();
-    let version_arg_val = version_arg_val.unwrap();
-    let version_arg_val = Version::parse(version_arg_val.as_str());
-
-    match version_arg_val {
-        Err(cause) => {
-            return Err(ReleaseError::VersionParsingError { cause });
-        }
-        Ok(version_arg_val) => {
-            match version_arg_val.cmp(&version_current) {
-                Ordering::Less => {
-                    return Err(ReleaseError::CurrentVersionGreater {
-                        input: version_arg_val.clone(),
-                        current: version_current,
-                    });
-                }
-                Ordering::Equal => {
-                    return Err(ReleaseError::CurrentVersionEqual {
-                        input: version_arg_val.clone(),
-                        current: version_current,
-                    });
-                }
-                Ordering::Greater => {
-                    // bump_version(version_arg_val);
-                    build_workspace_release()?;
-                    release_git(version_arg_val.clone()).await?;
-                    return Ok(());
-                }
-            }
-        }
-    }
+    Ok(())
 }
 
-// fn bump_version(_version: Version) {
-//     todo!("bump version in Cargo.tomls across workspace");
-// }
+// TODO: replace DynError
+async fn bump() -> Result<(), ReleaseError> {
+    // cargo workspaces version --allow-branch dani_cargo_run_new_cmd --no-git-push
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let cargo_ws_version = Command::new(cargo)
+        .current_dir(project_root())
+        .args([
+            "workspaces",
+            "version",
+            // "--allow-branch", // TODO: uncomment
+            // "releases/*",     // TODO: uncomment
+            "--no-git-commit",
+        ])
+        .status()
+        .expect("Failed to bump workspaces version");
+
+    info!("cargo_ws_version: {:#?}", cargo_ws_version);
+    return match cargo_ws_version.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::BuildWorkspace { status }),
+        None => Ok(()),
+    };
+}
 
 fn build_workspace_release() -> Result<(), ReleaseError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
@@ -389,8 +358,8 @@ fn build_workspace_release() -> Result<(), ReleaseError> {
 async fn release_git(version: Version) -> Result<(), ReleaseError> {
     git_create_branch(version.clone()).await?;
     git_switch_branch(version.clone()).await?;
-    git_push_branch(version.clone()).await?;
     github_create_pr(version.clone()).await?;
+    github_release(version);
 
     Ok(())
 }
@@ -424,26 +393,6 @@ async fn git_switch_branch(version: Version) -> Result<(), ReleaseError> {
     return match switch_branch.code() {
         Some(0) => Ok(()),
         Some(status) => Err(ReleaseError::GitSwitchBranch { version, status }),
-        None => Ok(()),
-    };
-}
-
-async fn git_push_branch(version: Version) -> Result<(), ReleaseError> {
-    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-    let push_branch = Command::new(git)
-        .current_dir(project_root())
-        .args([
-            "push",
-            "-u",
-            "origin",
-            format!("releases/{}", version).as_str(),
-        ])
-        .status()
-        .expect("Failed to push git branch");
-
-    return match push_branch.code() {
-        Some(0) => Ok(()),
-        Some(status) => Err(ReleaseError::GitPushBranch { status, version }),
         None => Ok(()),
     };
 }
