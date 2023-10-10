@@ -4,7 +4,9 @@ use dialoguer::{theme::ColorfulTheme, Input};
 use log::{debug, error, info, trace, warn};
 use tokio::sync::oneshot::channel;
 
+use semver::Version;
 use std::{
+    cmp::Ordering,
     env,
     error::Error,
     fs,
@@ -18,7 +20,6 @@ use tokio::{
     process::{Child, ChildStderr, ChildStdout, Command},
     time::{Duration, Instant},
 };
-use version_compare::{compare, Cmp};
 
 pub mod development {
     tonic::include_proto!("development");
@@ -28,15 +29,15 @@ use development::{DeployReply, DeployRequest, EchoReply, EchoRequest, Empty};
 
 #[derive(Debug, Error)]
 enum StartError {
-    #[error("server error. Cause: {cause:?}")]
+    #[error("server error. Cause: {cause:#?}")]
     ServerError { cause: String },
 }
 
 #[derive(Debug, Error)]
 enum StopError {
-    #[error("client error. Cause: {cause:?}")]
+    #[error("client error. Cause: {cause:#?}")]
     ClientError { cause: String },
-    #[error("client method error. Cause: {cause:?}")]
+    #[error("client method error. Cause: {cause:#?}")]
     MethodError { cause: String },
 }
 
@@ -49,13 +50,13 @@ enum ServerState {
 
 #[derive(Error, Debug)]
 enum ServerError {
-    #[error("development_server error. Cause: {cause:?}")]
+    #[error("development_server error. Cause: {cause:#?}")]
     ServerError { cause: String },
 }
 
 #[derive(Debug, Error)]
 enum PollError {
-    #[error("development_server error. Cause: {cause:?}")]
+    #[error("development_server error. Cause: {cause:#?}")]
     ServerError { cause: String },
     #[error("timeout")]
     Timeout,
@@ -63,11 +64,11 @@ enum PollError {
 
 #[derive(Debug, Error)]
 enum DeploymentError {
-    #[error("path for component '{component:?}' not found. Path: {path:?}")]
+    #[error("path for component '{component}' not found. Path: {path}")]
     PathNotFound { component: String, path: String },
-    #[error("client error. Cause: {cause:?}")]
+    #[error("client error. Cause: {cause:#?}")]
     ClientError { cause: String },
-    #[error("deployment error. Cause: {cause:?}")]
+    #[error("deployment error. Cause: {cause:#?}")]
     DeploymentError { cause: String },
     #[error("server error")]
     ServerError,
@@ -75,36 +76,22 @@ enum DeploymentError {
 
 #[derive(Debug, Error)]
 enum NewProjectError {
-    #[error("npm/npx not found")]
-    NpmNotFound,
-    #[error("npx create-next-app failed. Status code: {status:}")]
-    CreateNextAppFailed { status: i32 },
+    // #[error("npm/npx not found")]
+    // NpmNotFound,
+    #[error("npx create-next-app failed. Cause: {cause:#?}")]
+    CreateNextAppFailed { cause: String },
 }
 
 #[derive(Debug, Error)]
 enum ReleaseError {
-    #[error(
-        "argument `--version {version_input:?}` is lower than the current version {version_current:?}"
-    )]
-    VersionLowerThanCurrent {
-        version_input: String,
-        version_current: String,
-    },
-    #[error(
-        "argument `--version {version_input:?}` equal to the current version {version_current:?}"
-    )]
-    VersionEqualToCurrent {
-        version_input: String,
-        version_current: String,
-    },
-    #[error("Version comparison error")]
-    VersionComparisonError,
-    #[error(
-        "`cargo xtask --version {version:?}` failed.
-
-        Status code: {status:?}"
-    )]
-    XtaskReleaseFailed { version: String, status: i32 },
+    #[error("Version parsing error. Cause: {cause:#?}")]
+    VersionParsingError { cause: semver::Error },
+    #[error("current version is {current} greater than argument `--version {input}`")]
+    CurrentVersionGreater { input: Version, current: Version },
+    #[error("current version {current} equal to `--version {input}`")]
+    CurrentVersionEqual { input: Version, current: Version },
+    #[error("`cargo xtask --version {version}` failed. Code: {status}")]
+    XtaskReleaseFailed { version: Version, status: i32 },
 }
 
 type DynError = Box<dyn Error>;
@@ -122,6 +109,7 @@ struct DevelopmentServerClient {
     propagate_version = true,
     disable_version_flag = true,
 )]
+
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -191,12 +179,12 @@ enum Commands {
         #[clap(long, default_value = "3001")]
         http_port: u16,
 
-        /// The port rpc server should bind to
-        /// Default: 50051
+        /// The port rpc Versionshould bind to
+        /// Default:Version
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
     },
-    /// Release a new Mycelia version
+    /// Release a new MyceliaVersion
     Release {
         /// The new Mycelia version
         #[clap(long)]
@@ -238,7 +226,7 @@ async fn try_main() -> Result<(), DynError> {
             start(ip, http_port, rpc_port, open_browser, background).await;
         }
         Commands::New => {
-            let _ = new().await;
+            new().await?;
         }
         Commands::Stop { ip, rpc_port } => {
             stop(ip, rpc_port).await;
@@ -593,7 +581,8 @@ async fn scaffold_next(app_name: String) -> Result<(), NewProjectError> {
                     println!("OKAY");
                 }
                 Err(error) => {
-                    println!("🪵 [main.rs:592]~ token ~ \x1b[0;32merror\x1b[0m = {}", error);
+
+                    return Err(NewProjectError::CreateNextAppFailed { cause: error.to_string()});
                 }
             }
         }
@@ -726,7 +715,7 @@ async fn try_deploy(
 
 async fn release(version_arg_val: &String) {
     if let Err(error) = try_release(version_arg_val).await {
-        error!("{error:#}");
+        error!("{error}");
 
         std::process::exit(-1);
     }
@@ -736,44 +725,58 @@ async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
     info!("Releasing new Mycelia version {version_arg_val:}");
 
     let version_current: &str = env!("CARGO_PKG_VERSION");
-    let version_comparison = compare(version_arg_val.clone(), version_current);
-    if version_comparison.is_err() {
-        return Err(ReleaseError::VersionComparisonError);
-    }
-    match version_comparison {
-        Ok(Cmp::Lt) => {
-            return Err(ReleaseError::VersionLowerThanCurrent {
-                version_input: version_arg_val.clone(),
-                version_current: version_current.to_string(),
-            });
-        }
-        Ok(Cmp::Eq) => {
-            return Err(ReleaseError::VersionEqualToCurrent {
-                version_input: version_arg_val.clone(),
-                version_current: version_current.to_string(),
-            });
-        }
-        _ => {}
+    let version_current = Version::parse(version_current);
+    if let Err(cause) = version_current {
+        return Err(ReleaseError::VersionParsingError { cause });
     }
 
-    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let release_process = std::process::Command::new(cargo)
-        .current_dir(project_root())
-        .args(&["xtask", "release", "--version", version_arg_val])
-        .status()
-        .expect("Unable to spawn release process");
+    let version_current = version_current.unwrap();
+    let version_arg_val = Version::parse(version_arg_val);
 
-    return match release_process.code() {
-        Some(0) => Ok(()),
-        Some(code) => Err(ReleaseError::XtaskReleaseFailed {
-            version: version_arg_val.clone(),
-            status: code,
-        }),
-        None => Err(ReleaseError::XtaskReleaseFailed {
-            version: version_arg_val.clone(),
-            status: -1,
-        }),
-    };
+    match version_arg_val {
+        Err(error) => {
+            return Err(ReleaseError::VersionParsingError { cause: error });
+        }
+        Ok(version_arg_val) => match version_arg_val.cmp(&version_current) {
+            Ordering::Greater => {
+                return Err(ReleaseError::CurrentVersionGreater {
+                    input: version_arg_val.clone(),
+                    current: version_current,
+                });
+            }
+            Ordering::Equal => {
+                return Err(ReleaseError::CurrentVersionEqual {
+                    input: version_arg_val.clone(),
+                    current: version_current,
+                });
+            }
+            Ordering::Less => {
+                let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+                let release_process = std::process::Command::new(cargo)
+                    .current_dir(project_root())
+                    .args(&[
+                        "xtask",
+                        "release",
+                        "--version",
+                        version_arg_val.to_string().as_str(),
+                    ])
+                    .status()
+                    .expect("Unable to spawn release process");
+
+                return match release_process.code() {
+                    Some(0) => Ok(()),
+                    Some(code) => Err(ReleaseError::XtaskReleaseFailed {
+                        version: version_arg_val.clone(),
+                        status: code,
+                    }),
+                    None => Err(ReleaseError::XtaskReleaseFailed {
+                        version: version_arg_val.clone(),
+                        status: -1,
+                    }),
+                };
+            }
+        },
+    }
 }
 
 fn project_root() -> PathBuf {

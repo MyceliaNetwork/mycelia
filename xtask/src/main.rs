@@ -1,6 +1,7 @@
 #[allow(clippy::all)]
 use log::{error, info};
 
+use semver::Version;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -9,18 +10,11 @@ use std::{
     process::Command,
 };
 use thiserror::Error;
-use version_compare::{compare, Cmp};
 
 #[derive(Debug, Error)]
 enum BuildError {
-    #[error(
-        "
-    `cargo build --workspace` failed.
-
-Status code: {status}"
-    )]
+    #[error("`cargo build --workspace` failed. Status code: {status}")]
     Workspace { status: i32 },
-
     #[error(
         "Build wasm '{guest_name}' failed.
 
@@ -33,13 +27,11 @@ Status code: {status}"
         guest_path: PathBuf,
         status: i32,
     },
-
     #[error("wasm guest file '{guest_name}' for '{guest_path}' does not exist")]
     GuestFileNonExistent {
         guest_name: String,
         guest_path: PathBuf,
     },
-
     #[error(
         "Build component '{guest_name}' failed.
 
@@ -69,72 +61,34 @@ Status code: {status}"
 enum ReleaseError {
     #[error("missing --version argument. Example: `--version 1.2.3`")]
     MissingVersionArg,
-    #[error("missing --version value. Example: `--version 1.2.3`")]
-    MissingVersionVal,
-    #[error(
-        "argument `--version {version_input}` is lower than the current version {version_current}"
-    )]
-    VersionLowerThanCurrent {
-        version_input: String,
-        version_current: String,
-    },
-    #[error("argument `--version {version_input}` equal to the current version {version_current}")]
-    VersionEqualToCurrent {
-        version_input: String,
-        version_current: String,
-    },
-    #[error("Version comparison error")]
-    VersionComparisonError,
-    #[error(
-        "building workspace failded.
-
-Status code: {status}"
-    )]
+    #[error("version parsing error. Cause: {cause}")]
+    VersionParsingError { cause: semver::Error },
+    #[error("current version {current} is greater than argument `--version {input}`")]
+    CurrentVersionGreater { input: Version, current: Version },
+    #[error("current version {current} is equal to argument `--version {input}`")]
+    CurrentVersionEqual { input: Version, current: Version },
+    #[error("building workspace failded. Status code: {status}")]
     BuildWorkspace { status: i32 },
-    #[error(
-        "`git branch releases/{version}` failed.
-
-Status code: {status}"
-    )]
-    GitCreateBranch { version: String, status: i32 },
-    #[error(
-        "`git switch releases/{version}` failed.
-
-Status code: {status}"
-    )]
-    GitSwitchBranch { status: i32, version: String },
-    #[error(
-        "`git push origin -u releases/{version}` failed.
-
-Status code: {status}"
-    )]
-    GitPushBranch { version: String, status: i32 },
-    #[error(
-        "`gh pr create --fill --base releases/{version} --assignee @me --title \"Release {version}\"` failed.
-
-Status code: {status}"
-    )]
-    GitHubCreatePullRequest { version: String, status: i32 },
+    #[error("`git branch releases/{version}` failed. Status code: {status}")]
+    GitCreateBranch { version: Version, status: i32 },
+    #[error("`git switch releases/{version}` failed. Status code: {status}")]
+    GitSwitchBranch { version: Version, status: i32 },
+    #[error("`git push origin -u releases/{version}` failed. Status code: {status}")]
+    GitPushBranch { version: Version, status: i32 },
+    #[error("`gh pr create --fill --base releases/{version} --assignee @me --title \"Release {version}\"` failed. Status code: {status}" )]
+    GitHubCreatePullRequest { version: Version, status: i32 },
 }
 
 #[derive(Debug, Error)]
 enum PublishError {
     #[error("missing --version argument. Example: `--version 1.2.3`")]
     MissingVersionArg,
-    #[error("missing --version value. Example: `--version 1.2.3`")]
-    MissingVersionVal,
-    #[error(
-        "`gh release create --prerelease --generate-notes` failed.
-
-Status code {status}"
-    )]
-    GitHub { version: String, status: i32 },
-    #[error(
-        "`rustwrap --tag {version}` failed.
-
-Status code: {status}"
-    )]
-    Rustwrap { version: String, status: i32 },
+    #[error("Version parsing error. Cause: {cause}")]
+    VersionParsingError { cause: semver::Error },
+    #[error("`gh release create --prerelease --generate-notes` failed. Status code {status}")]
+    GitHub { version: Version, status: i32 },
+    #[error("`rustwrap --tag {version}` failed. Status code: {status}")]
+    Rustwrap { version: Version, status: i32 },
 }
 
 type DynError = Box<dyn std::error::Error>;
@@ -223,8 +177,8 @@ fn guests() -> Vec<Guest> {
 
         return match a.cmp(&b) {
             Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
             Ordering::Equal => Ordering::Equal,
+            Ordering::Greater => Ordering::Greater,
         };
     });
 
@@ -355,7 +309,8 @@ fn build_component(guest: &Guest) -> Result<(), BuildError> {
 
 async fn release() -> Result<(), ReleaseError> {
     if let Err(error) = try_release().await {
-        eprintln!("{error:#}");
+        error!("{error:#}");
+
         std::process::exit(-1);
     }
 
@@ -374,40 +329,47 @@ async fn try_release() -> Result<(), ReleaseError> {
             }
         }
     }
-    if version_arg_val.clone().is_none() {
-        return Err(ReleaseError::MissingVersionVal);
-    }
 
-    let version_comparison = compare(version_arg_val.clone().unwrap(), version_current);
-    if version_comparison.is_err() {
-        return Err(ReleaseError::VersionComparisonError);
+    let version_current = Version::parse(version_current);
+    if let Err(cause) = version_current {
+        return Err(ReleaseError::VersionParsingError { cause });
     }
-    match version_comparison.unwrap() {
-        Cmp::Lt => {
-            return Err(ReleaseError::VersionLowerThanCurrent {
-                version_input: version_arg_val.clone().unwrap(),
-                version_current: version_current.to_string(),
-            });
+    let version_current = version_current.unwrap();
+    let version_arg_val = version_arg_val.unwrap();
+    let version_arg_val = Version::parse(version_arg_val.as_str());
+
+    match version_arg_val {
+        Err(cause) => {
+            return Err(ReleaseError::VersionParsingError { cause });
         }
-        Cmp::Eq => {
-            return Err(ReleaseError::VersionEqualToCurrent {
-                version_input: version_arg_val.clone().unwrap(),
-                version_current: version_current.to_string(),
-            });
+        Ok(version_arg_val) => {
+            match version_arg_val.cmp(&version_current) {
+                Ordering::Less => {
+                    return Err(ReleaseError::CurrentVersionGreater {
+                        input: version_arg_val.clone(),
+                        current: version_current,
+                    });
+                }
+                Ordering::Equal => {
+                    return Err(ReleaseError::CurrentVersionEqual {
+                        input: version_arg_val.clone(),
+                        current: version_current,
+                    });
+                }
+                Ordering::Greater => {
+                    // bump_version(version_arg_val);
+                    build_workspace_release()?;
+                    release_git(version_arg_val.clone()).await?;
+                    return Ok(());
+                }
+            }
         }
-        _ => {}
     }
-
-    bump_version(version_arg_val.clone().unwrap());
-    build_workspace_release()?;
-    release_git(version_arg_val.unwrap()).await?;
-
-    Ok(())
 }
 
-fn bump_version(_version: String) {
-    println!("bump version in Cargo.tomls across workspace");
-}
+// fn bump_version(_version: Version) {
+//     todo!("bump version in Cargo.tomls across workspace");
+// }
 
 fn build_workspace_release() -> Result<(), ReleaseError> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
@@ -418,12 +380,13 @@ fn build_workspace_release() -> Result<(), ReleaseError> {
         .expect("Failed to build workspace");
 
     return match cargo_build.code() {
-        Some(code) => Err(ReleaseError::BuildWorkspace { status: code }),
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::BuildWorkspace { status }),
         None => Ok(()),
     };
 }
 
-async fn release_git(version: String) -> Result<(), ReleaseError> {
+async fn release_git(version: Version) -> Result<(), ReleaseError> {
     git_create_branch(version.clone()).await?;
     git_switch_branch(version.clone()).await?;
     git_push_branch(version.clone()).await?;
@@ -432,7 +395,7 @@ async fn release_git(version: String) -> Result<(), ReleaseError> {
     Ok(())
 }
 
-async fn git_create_branch(version: String) -> Result<(), ReleaseError> {
+async fn git_create_branch(version: Version) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let create_branch = Command::new(git)
         .current_dir(project_root())
@@ -447,11 +410,14 @@ async fn git_create_branch(version: String) -> Result<(), ReleaseError> {
     };
 }
 
-async fn git_switch_branch(version: String) -> Result<(), ReleaseError> {
+async fn git_switch_branch(version: Version) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let switch_branch = Command::new(git)
         .current_dir(project_root())
-        .args(["switch", format!("releases/{}", version).as_str()])
+        .args([
+            "switch",
+            format!("releases/{}", version.to_string()).as_str(),
+        ])
         .status()
         .expect("Failed to switch git branch");
 
@@ -462,7 +428,7 @@ async fn git_switch_branch(version: String) -> Result<(), ReleaseError> {
     };
 }
 
-async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
+async fn git_push_branch(version: Version) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let push_branch = Command::new(git)
         .current_dir(project_root())
@@ -482,7 +448,7 @@ async fn git_push_branch(version: String) -> Result<(), ReleaseError> {
     };
 }
 
-async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
+async fn github_create_pr(version: Version) -> Result<(), ReleaseError> {
     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
     let create_pr = Command::new(github)
         .current_dir(project_root())
@@ -493,9 +459,9 @@ async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
             "--assignee",
             "@me",
             "--base",
-            format!("releases/{}", version).as_str(),
+            format!("releases/{}", version.to_string()).as_str(),
             "--title",
-            format!("Release {}", version).as_str(),
+            format!("Release {}", version.to_string()).as_str(),
             "",
         ])
         .status()
@@ -508,7 +474,7 @@ async fn github_create_pr(version: String) -> Result<(), ReleaseError> {
     };
 }
 
-fn github_release(version: String) -> Result<(), PublishError> {
+fn github_release(version: Version) -> Result<(), PublishError> {
     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
     let create_release = Command::new(github)
         .current_dir(project_root())
@@ -530,7 +496,8 @@ fn github_release(version: String) -> Result<(), PublishError> {
 
 async fn publish() -> Result<(), PublishError> {
     if let Err(error) = try_publish() {
-        eprintln!("{error:#}");
+        error!("{error:#}");
+
         std::process::exit(-1);
     }
 
@@ -548,22 +515,28 @@ fn try_publish() -> Result<(), PublishError> {
             }
         }
     }
-    if version_arg_val.clone().is_none() {
-        return Err(PublishError::MissingVersionVal);
+
+    let version_arg_val = Version::parse(version_arg_val.unwrap().as_str());
+    if version_arg_val.is_err() {
+        return Err(PublishError::VersionParsingError {
+            cause: version_arg_val.unwrap_err(),
+        });
     }
 
-    github_release(version_arg_val.clone().unwrap())?;
-    publish_pkg(version_arg_val.unwrap())?;
+    let version_arg_val = version_arg_val.unwrap();
+
+    github_release(version_arg_val.clone())?;
+    publish_pkg(version_arg_val.clone())?;
 
     Ok(())
 }
 
-fn publish_pkg(version: String) -> Result<(), PublishError> {
+fn publish_pkg(version: Version) -> Result<(), PublishError> {
     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
 
     let rustwrap = Command::new(rustwrap)
         .current_dir(project_root())
-        .args(["--tag", version.as_str()])
+        .args(["--tag", &version.to_string()])
         .status()
         .expect("Failed to publish package");
 
