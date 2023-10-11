@@ -588,7 +588,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "297c921b2c1cdbbe3141c74b56a9f8f876f0e1d7048964cfaa55713d2e3694d0"
 dependencies = [
  "camino",
- "cargo_metadata",
+ "cargo_metadata 0.13.1",
  "clap 3.1.18",
  "crates-index",
  "ctrlc",
@@ -619,6 +619,20 @@ dependencies = [
  "semver-parser",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb9ac64500cc83ce4b9f8dafa78186aa008c8dea77a09b94cd307fd0cd5022a8"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver 1.0.19",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -3011,6 +3025,9 @@ name = "semver"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad977052201c6de01a8ef2aa3378c4bd23217a056337d1d6da40468d267a4fb0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "semver-parser"
@@ -4811,6 +4828,7 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "cargo-workspaces",
+ "cargo_metadata 0.18.0",
  "dialoguer 0.11.0",
  "env_logger",
  "log",
