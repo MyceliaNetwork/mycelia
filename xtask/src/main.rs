@@ -11,6 +11,8 @@ use std::{
 };
 use thiserror::Error;
 
+use cargo_metadata::MetadataCommand;
+
 #[derive(Debug, Error)]
 enum BuildError {
     #[error("`cargo build --workspace` failed. Status code: {status}")]
@@ -65,10 +67,16 @@ enum ReleaseError {
     GitCreateBranch { version: Version, status: i32 },
     #[error("`git switch releases/{version}` failed. Status code: {status}")]
     GitSwitchBranch { version: Version, status: i32 },
+    #[error("`git add .` failed for version {version}. Status code: {status}")]
+    GitAddAll { version: Version, status: i32 },
+    #[error("`commit -m \"Release {version:}\"` failed. Status code: {status:}")]
+    GitCommit { version: Version, status: i32 },
     #[error("`git push origin -u releases/{version}` failed. Status code: {status}")]
     GitPushBranch { version: Version, status: i32 },
     #[error("`gh pr create --fill --base releases/{version} --assignee @me --title \"Release {version}\"` failed. Status code: {status}" )]
     GitHubCreatePullRequest { version: Version, status: i32 },
+    #[error("`gh release create --prerelease --generate-notes` failed. Status code: {status}")]
+    GitHubRelease { version: Version, status: i32 },
 }
 
 #[derive(Debug, Error)]
@@ -77,8 +85,7 @@ enum PublishError {
     MissingVersionArg,
     #[error("Version parsing error. Cause: {cause}")]
     VersionParsingError { cause: semver::Error },
-    #[error("`gh release create --prerelease --generate-notes` failed. Status code {status}")]
-    GitHub { version: Version, status: i32 },
+
     #[error("`rustwrap --tag {version}` failed. Status code: {status}")]
     Rustwrap { version: Version, status: i32 },
 }
@@ -106,7 +113,6 @@ async fn try_main() -> Result<(), DynError> {
         Some("build") => build().await?,
         Some("release") => release().await?,
         Some("publish") => publish().await?,
-        Some("bump") => bump().await?,
         _ => print_help(),
     }
 
@@ -313,7 +319,30 @@ async fn release() -> Result<(), ReleaseError> {
 async fn try_release() -> Result<(), ReleaseError> {
     bump().await?;
 
+    let version = parse_cargo_pkg_version();
+
+    git_create_branch(version.clone()).await?;
+    git_switch_branch(version.clone(), false).await?;
+    git_push_branch(version.clone()).await?;
+    github_create_pr(version.clone()).await?;
+    github_release(version.clone()).await?;
+
     Ok(())
+}
+
+// HACK: cargo's fill_env is called upon build, but after cargo-workspaces
+// updates the version this is not reflected in the env variable.
+fn parse_cargo_pkg_version() -> Version {
+    let path = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let meta = MetadataCommand::new()
+        .manifest_path("./Cargo.toml")
+        .current_dir(&path)
+        .exec()
+        .unwrap();
+
+    let root = meta.root_package().unwrap();
+    let version = &root.version;
+    return version.clone();
 }
 
 // TODO: replace DynError
@@ -332,7 +361,6 @@ async fn bump() -> Result<(), ReleaseError> {
         .status()
         .expect("Failed to bump workspaces version");
 
-    info!("cargo_ws_version: {:#?}", cargo_ws_version);
     return match cargo_ws_version.code() {
         Some(0) => Ok(()),
         Some(status) => Err(ReleaseError::BuildWorkspace { status }),
@@ -355,15 +383,6 @@ fn build_workspace_release() -> Result<(), ReleaseError> {
     };
 }
 
-async fn release_git(version: Version) -> Result<(), ReleaseError> {
-    git_create_branch(version.clone()).await?;
-    git_switch_branch(version.clone()).await?;
-    github_create_pr(version.clone()).await?;
-    github_release(version);
-
-    Ok(())
-}
-
 async fn git_create_branch(version: Version) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let create_branch = Command::new(git)
@@ -379,20 +398,81 @@ async fn git_create_branch(version: Version) -> Result<(), ReleaseError> {
     };
 }
 
-async fn git_switch_branch(version: Version) -> Result<(), ReleaseError> {
+async fn git_switch_branch(version: Version, switch_back: bool) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let branch = match switch_back {
+        true => "-".to_string(),
+        false => format!("releases/{}", version.to_string()),
+    };
     let switch_branch = Command::new(git)
         .current_dir(project_root())
-        .args([
-            "switch",
-            format!("releases/{}", version.to_string()).as_str(),
-        ])
+        .args(["switch", branch.as_str()])
         .status()
         .expect("Failed to switch git branch");
 
     return match switch_branch.code() {
         Some(0) => Ok(()),
-        Some(status) => Err(ReleaseError::GitSwitchBranch { version, status }),
+        Some(status) => {
+            let branch_already_exists: i32 = 128;
+            if status == branch_already_exists {
+                git_switch_branch(version.clone(), true);
+            }
+            return Err(ReleaseError::GitSwitchBranch {
+                version,
+                status: branch_already_exists,
+            });
+        }
+        None => Ok(()),
+    };
+}
+
+async fn git_add_all(version: Version) -> Result<(), ReleaseError> {
+    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let add_all = Command::new(git)
+        .current_dir(project_root())
+        .args(&["add", "."])
+        .status()
+        .expect("`git add .` failed");
+
+    return match add_all.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::GitAddAll { version, status }),
+        None => Ok(()),
+    };
+}
+
+async fn git_commit(version: Version) -> Result<(), ReleaseError> {
+    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let commit_msg = format!("Release {}", version);
+    let commit = Command::new(git)
+        .current_dir(project_root())
+        .args(&["commit", "-m", commit_msg.as_str()])
+        .status()
+        .expect("`git commit -m {commit_msg}");
+
+    return match commit.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::GitCommit { version, status }),
+        None => Ok(()),
+    };
+}
+
+async fn git_push_branch(version: Version) -> Result<(), ReleaseError> {
+    let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+    let push_branch = Command::new(git)
+        .current_dir(project_root())
+        .args([
+            "push",
+            "-u",
+            "origin",
+            format!("releases/{}", version).as_str(),
+        ])
+        .status()
+        .expect("Failed to push git branch");
+
+    return match push_branch.code() {
+        Some(0) => Ok(()),
+        Some(status) => Err(ReleaseError::GitPushBranch { status, version }),
         None => Ok(()),
     };
 }
@@ -423,7 +503,7 @@ async fn github_create_pr(version: Version) -> Result<(), ReleaseError> {
     };
 }
 
-fn github_release(version: Version) -> Result<(), PublishError> {
+async fn github_release(version: Version) -> Result<(), ReleaseError> {
     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
     let create_release = Command::new(github)
         .current_dir(project_root())
@@ -438,13 +518,13 @@ fn github_release(version: Version) -> Result<(), PublishError> {
 
     return match create_release.code() {
         Some(0) => Ok(()),
-        Some(status) => Err(PublishError::GitHub { version, status }),
+        Some(status) => Err(ReleaseError::GitHubRelease { version, status }),
         None => Ok(()),
     };
 }
 
 async fn publish() -> Result<(), PublishError> {
-    if let Err(error) = try_publish() {
+    if let Err(error) = try_publish().await {
         error!("{error:#}");
 
         std::process::exit(-1);
@@ -453,7 +533,7 @@ async fn publish() -> Result<(), PublishError> {
     Ok(())
 }
 
-fn try_publish() -> Result<(), PublishError> {
+async fn try_publish() -> Result<(), PublishError> {
     let version_arg_tag = env::args().nth(2);
     let version_arg_val = env::args().nth(3);
     match version_arg_tag.clone() {
@@ -474,13 +554,12 @@ fn try_publish() -> Result<(), PublishError> {
 
     let version_arg_val = version_arg_val.unwrap();
 
-    github_release(version_arg_val.clone())?;
-    publish_pkg(version_arg_val.clone())?;
+    publish_pkg(version_arg_val.clone()).await?;
 
     Ok(())
 }
 
-fn publish_pkg(version: Version) -> Result<(), PublishError> {
+async fn publish_pkg(version: Version) -> Result<(), PublishError> {
     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
 
     let rustwrap = Command::new(rustwrap)
