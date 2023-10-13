@@ -323,6 +323,8 @@ async fn try_release() -> Result<(), ReleaseError> {
 
     git_create_branch(version.clone()).await?;
     git_switch_branch(version.clone(), false).await?;
+    git_add_all(version.clone())?;
+    git_commit(version.clone())?;
     git_push_branch(version.clone()).await?;
     github_create_pr(version.clone()).await?;
     github_release(version.clone()).await?;
@@ -426,7 +428,7 @@ async fn git_switch_branch(version: Version, switch_back: bool) -> Result<(), Re
     };
 }
 
-async fn git_add_all(version: Version) -> Result<(), ReleaseError> {
+fn git_add_all(version: Version) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let add_all = Command::new(git)
         .current_dir(project_root())
@@ -441,7 +443,7 @@ async fn git_add_all(version: Version) -> Result<(), ReleaseError> {
     };
 }
 
-async fn git_commit(version: Version) -> Result<(), ReleaseError> {
+fn git_commit(version: Version) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let commit_msg = format!("Release {}", version);
     let commit = Command::new(git)
