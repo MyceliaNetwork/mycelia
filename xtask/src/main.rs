@@ -1,6 +1,7 @@
 #[allow(clippy::all)]
-use log::{error, info};
+use log::{error, info, trace};
 
+use dialoguer::{theme::ColorfulTheme, Select};
 use semver::Version;
 use std::{
     cmp::Ordering,
@@ -75,8 +76,11 @@ enum ReleaseError {
     GitPushBranch { version: Version, status: i32 },
     #[error("`gh pr create --fill --base releases/{version} --assignee @me --title \"Release {version}\"` failed. Status code: {status}" )]
     GitHubCreatePullRequest { version: Version, status: i32 },
+    // TODO: update final command
     #[error("`gh release create --prerelease --generate-notes` failed. Status code: {status}")]
-    GitHubRelease { version: Version, status: i32 },
+    GitHubReleaseCreate { version: Version, status: i32 },
+    #[error("`gh release list` failed. Cause: {cause}")]
+    GitHubReleaseList { cause: String },
 }
 
 #[derive(Debug, Error)]
@@ -326,8 +330,8 @@ async fn try_release() -> Result<(), ReleaseError> {
     git_add_all(version.clone())?;
     git_commit(version.clone())?;
     git_push_branch(version.clone()).await?;
-    github_create_pr(version.clone()).await?;
-    github_release(version.clone()).await?;
+    github_pr_create(version.clone()).await?;
+    github_release_create(version.clone()).await?;
 
     Ok(())
 }
@@ -356,8 +360,8 @@ async fn bump() -> Result<(), ReleaseError> {
         .args([
             "workspaces",
             "version",
-            // "--allow-branch", // TODO: uncomment
-            // "releases/*",     // TODO: uncomment
+            "--allow-branch",
+            "releases/*",
             "--no-git-commit",
         ])
         .status()
@@ -479,7 +483,7 @@ async fn git_push_branch(version: Version) -> Result<(), ReleaseError> {
     };
 }
 
-async fn github_create_pr(version: Version) -> Result<(), ReleaseError> {
+async fn github_pr_create(version: Version) -> Result<(), ReleaseError> {
     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
     let create_pr = Command::new(github)
         .current_dir(project_root())
@@ -505,7 +509,7 @@ async fn github_create_pr(version: Version) -> Result<(), ReleaseError> {
     };
 }
 
-async fn github_release(version: Version) -> Result<(), ReleaseError> {
+async fn github_release_create(version: Version) -> Result<(), ReleaseError> {
     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
     let create_release = Command::new(github)
         .current_dir(project_root())
@@ -520,7 +524,7 @@ async fn github_release(version: Version) -> Result<(), ReleaseError> {
 
     return match create_release.code() {
         Some(0) => Ok(()),
-        Some(status) => Err(ReleaseError::GitHubRelease { version, status }),
+        Some(status) => Err(ReleaseError::GitHubReleaseCreate { version, status }),
         None => Ok(()),
     };
 }
@@ -536,32 +540,50 @@ async fn publish() -> Result<(), PublishError> {
 }
 
 async fn try_publish() -> Result<(), PublishError> {
-    let version_arg_tag = env::args().nth(2);
-    let version_arg_val = env::args().nth(3);
-    match version_arg_tag.clone() {
-        None => return Err(PublishError::MissingVersionArg),
-        Some(tag) => {
-            if tag != "--version" {
-                return Err(PublishError::MissingVersionArg);
-            }
-        }
-    }
+    info!("Publishing release");
+    let releases = github_release_list();
+    let releases = parse_releases(&releases);
+    info!("{releases:#?}");
+    let selection = release_selection(releases.clone()).expect("Release Selection failed");
 
-    let version_arg_val = Version::parse(version_arg_val.unwrap().as_str());
-    if version_arg_val.is_err() {
-        return Err(PublishError::VersionParsingError {
-            cause: version_arg_val.unwrap_err(),
-        });
-    }
-
-    let version_arg_val = version_arg_val.unwrap();
-
-    publish_pkg(version_arg_val.clone()).await?;
+    println!("Enjoy your {}!", releases[selection]);
 
     Ok(())
 }
 
-async fn publish_pkg(version: Version) -> Result<(), PublishError> {
+fn github_release_list() -> String {
+    let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+    let releases = Command::new(github)
+        .current_dir(project_root())
+        .args(["release", "list"])
+        .output()
+        .expect("Failed to list GitHub releases");
+
+    let releases = String::from_utf8(releases.stdout).expect("Releases Output conversion failed");
+    return releases;
+}
+
+fn parse_releases<'a>(releases: &'a String) -> Vec<&'a str> {
+    return releases
+        .split("\n")
+        .map(|line| line.split(" ").last().unwrap())
+        .collect::<Vec<_>>();
+}
+
+fn release_selection(selections: Vec<&str>) -> Result<usize, PublishError> {
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Choose which release you'd like to publish")
+        .default(0)
+        .items(&selections[..])
+        .interact()
+        .expect("release_selection");
+
+    trace!("Picked {selection}!");
+
+    return Ok(selection);
+}
+
+fn publish_pkg(version: Version) -> Result<(), PublishError> {
     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
 
     let rustwrap = Command::new(rustwrap)
