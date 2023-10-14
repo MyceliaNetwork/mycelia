@@ -1,17 +1,17 @@
 targets:
   - platform: win32
     arch: x64
-    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.zip
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/__VERSION__.zip
   - platform: linux
     arch: x64
-    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.tar.gz
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/__VERSION__.tar.gz
   - platform: darwin
     arch: x64
-    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/test.tar.gz
-  # TODO: add arm64
-  # - platform: darwin
-  #   arch: arm64
-  #   url_template: https://github.com/rusty-ferris-club/recon/releases/download/v0.6.0/recon-aarch64-macos.tar.xz
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/__VERSION__.tar.gz
+  # TODO: test this
+  - platform: darwin
+    arch: arm64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/__VERSION__.tar.gz
 
 # provider: npm
 npm:
@@ -20,10 +20,10 @@ npm:
   name: mycelia
   root:
     name: mycelia
-    manifest: rustwrap/mycelia-root.json # NOTE: I have no idea why both root & sub are necessary
+    manifest: rustwrap/mycelia-root.json # NOTE: Not sure why both root & sub are necessary
     readme: README.md
   sub:
-    manifest: rustwrap/mycelia-sub.json # NOTE: I have no idea why both root & sub are necessary
+    manifest: rustwrap/mycelia-sub.json # NOTE: Not sure why both root & sub are necessary
     readme: README.md
 # provider: homebrew
 # brew:

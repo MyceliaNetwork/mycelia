@@ -1,7 +1,9 @@
-#[allow(clippy::all)]
-use log::{error, info, trace};
-
+use chrono::{DateTime, Utc};
 use dialoguer::{theme::ColorfulTheme, Select};
+#[allow(clippy::all)]
+use log::{error, info};
+// use octocrab::models::repos::Release;
+use octocrab::{self, models::repos::Release, models::ReleaseId, Error};
 use semver::Version;
 use std::{
     cmp::Ordering,
@@ -89,7 +91,10 @@ enum PublishError {
     MissingVersionArg,
     #[error("Version parsing error. Cause: {cause}")]
     VersionParsingError { cause: semver::Error },
-
+    #[error("There was an issue with Releases. Cause: {cause:#?}")]
+    ReleasesError { cause: Error },
+    #[error("Did not select a release")]
+    DidNotSelectRelease,
     #[error("`rustwrap --tag {version}` failed. Status code: {status}")]
     Rustwrap { version: Version, status: i32 },
 }
@@ -497,7 +502,7 @@ async fn github_pr_create(version: Version) -> Result<(), ReleaseError> {
             format!("releases/{}", version.to_string()).as_str(),
             "--title",
             format!("Release {}", version.to_string()).as_str(),
-            "",
+            "--verify-tag",
         ])
         .status()
         .expect("Failed to create GitHub pull request");
@@ -541,46 +546,76 @@ async fn publish() -> Result<(), PublishError> {
 
 async fn try_publish() -> Result<(), PublishError> {
     info!("Publishing release");
-    let releases = github_release_list();
-    let releases = parse_releases(&releases);
-    info!("{releases:#?}");
-    let selection = release_selection(releases.clone()).expect("Release Selection failed");
-
-    println!("Enjoy your {}!", releases[selection]);
+    let releases = github_release_list().await;
+    let releases = match releases {
+        Ok(releases) => releases,
+        Err(cause) => return Err(PublishError::ReleasesError { cause }),
+    };
+    let releases = releases.items;
+    release_selection(releases);
 
     Ok(())
 }
 
-fn github_release_list() -> String {
-    let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-    let releases = Command::new(github)
-        .current_dir(project_root())
-        .args(["release", "list"])
-        .output()
-        .expect("Failed to list GitHub releases");
+async fn github_release_list() -> Result<octocrab::Page<Release>, octocrab::Error> {
+    let octocrab = octocrab::instance();
+    let page = octocrab
+        .repos("MyceliaNetwork", "mycelia")
+        .releases()
+        .list()
+        // Optional Parameters
+        .per_page(100)
+        // .page(5u32)
+        // Send the request
+        .send()
+        .await;
 
-    let releases = String::from_utf8(releases.stdout).expect("Releases Output conversion failed");
-    return releases;
+    return page;
 }
 
-fn parse_releases<'a>(releases: &'a String) -> Vec<&'a str> {
-    return releases
-        .split("\n")
-        .map(|line| line.split(" ").last().unwrap())
-        .collect::<Vec<_>>();
+#[derive(Debug)]
+struct MyceliaRelease {
+    id: ReleaseId,
+    name: Option<String>,
+    created_at: Option<DateTime<Utc>>,
 }
 
-fn release_selection(selections: Vec<&str>) -> Result<usize, PublishError> {
+impl ToString for MyceliaRelease {
+    fn to_string(&self) -> String {
+        let id = self.id;
+        let date = self.created_at.expect("Release created at DateTime");
+        let name = self.name.clone().expect("Release name");
+        let padding_id = 12;
+        let padding_date = 32;
+        let padding_name = 48;
+
+        return format!("┌{id:─^padding_id$}┐ ┌{date:─^padding_date$}┐ ┌{name:─^padding_name$}┐");
+    }
+}
+
+fn release_selection(selections: Vec<Release>) -> Result<usize, PublishError> {
+    let selections: Vec<_> = selections
+        .into_iter()
+        .map(|release| {
+            let r = MyceliaRelease {
+                id: release.id,
+                name: release.name,
+                created_at: release.created_at,
+            };
+            return r;
+        })
+        .collect();
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Choose which release you'd like to publish")
         .default(0)
         .items(&selections[..])
-        .interact()
-        .expect("release_selection");
+        .interact_opt()
+        .expect("Release Selection failed");
 
-    trace!("Picked {selection}!");
-
-    return Ok(selection);
+    return match selection {
+        Some(selection) => Ok(selection),
+        None => Err(PublishError::DidNotSelectRelease),
+    };
 }
 
 fn publish_pkg(version: Version) -> Result<(), PublishError> {
