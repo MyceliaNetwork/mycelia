@@ -9,6 +9,8 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     env, fs,
+    fs::OpenOptions,
+    io::Write,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -81,16 +83,10 @@ enum ReleaseError {
     // TODO: update final command
     #[error("`gh release create --prerelease --generate-notes` failed. Status code: {status}")]
     GitHubReleaseCreate { version: Version, status: i32 },
-    #[error("`gh release list` failed. Cause: {cause}")]
-    GitHubReleaseList { cause: String },
 }
 
 #[derive(Debug, Error)]
 enum PublishError {
-    #[error("missing --version argument. Example: `--version 1.2.3`")]
-    MissingVersionArg,
-    #[error("Version parsing error. Cause: {cause}")]
-    VersionParsingError { cause: semver::Error },
     #[error("There was an issue with Releases. Cause: {cause:#?}")]
     ReleasesError { cause: Error },
     #[error("Did not select a release")]
@@ -331,7 +327,7 @@ async fn try_release() -> Result<(), ReleaseError> {
     let version = parse_cargo_pkg_version();
 
     git_create_branch(version.clone()).await?;
-    git_switch_branch(version.clone(), false).await?;
+    git_switch_branch(version.clone(), false)?;
     git_add_all(version.clone())?;
     git_commit(version.clone())?;
     git_push_branch(version.clone()).await?;
@@ -409,7 +405,7 @@ async fn git_create_branch(version: Version) -> Result<(), ReleaseError> {
     };
 }
 
-async fn git_switch_branch(version: Version, switch_back: bool) -> Result<(), ReleaseError> {
+fn git_switch_branch(version: Version, switch_back: bool) -> Result<(), ReleaseError> {
     let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
     let branch = match switch_back {
         true => "-".to_string(),
@@ -426,7 +422,7 @@ async fn git_switch_branch(version: Version, switch_back: bool) -> Result<(), Re
         Some(status) => {
             let branch_already_exists: i32 = 128;
             if status == branch_already_exists {
-                git_switch_branch(version.clone(), true);
+                git_switch_branch(version.clone(), true)?;
             }
             return Err(ReleaseError::GitSwitchBranch {
                 version,
@@ -552,9 +548,32 @@ async fn try_publish() -> Result<(), PublishError> {
         Err(cause) => return Err(PublishError::ReleasesError { cause }),
     };
     let releases = releases.items;
-    release_selection(releases);
+    let selection = release_selection(releases.clone());
+    let selection = selection.expect("Release selection error");
+    let selection = &releases[selection];
+    println!(
+        "🪵 [main.rs:551]~ token ~ \x1b[0;32mselection\x1b[0m = {:#?}",
+        selection
+    );
+
+    replace_all_in_file(file_rustwrap(), "__VERSION__", &selection.tag_name);
+    // publish_pkg(selection);
 
     Ok(())
+}
+
+fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
+    let contents = fs::read_to_string(path.clone()).expect("Could not read file: {path?}");
+    let new = contents.replace(from, to);
+    dbg!(&contents, &new);
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .expect("Could not open file: {path}");
+    file.write(new.as_bytes())
+        .expect("Could not write file: {path}");
 }
 
 async fn github_release_list() -> Result<octocrab::Page<Release>, octocrab::Error> {
@@ -576,20 +595,23 @@ async fn github_release_list() -> Result<octocrab::Page<Release>, octocrab::Erro
 #[derive(Debug)]
 struct MyceliaRelease {
     id: ReleaseId,
-    name: Option<String>,
+    tag_name: String,
     created_at: Option<DateTime<Utc>>,
 }
 
 impl ToString for MyceliaRelease {
     fn to_string(&self) -> String {
         let id = self.id;
-        let date = self.created_at.expect("Release created at DateTime");
-        let name = self.name.clone().expect("Release name");
-        let padding_id = 12;
-        let padding_date = 32;
-        let padding_name = 48;
+        let date = self
+            .created_at
+            .expect("Release created at DateTime")
+            .to_string();
+        let name = &self.tag_name;
+        let padding_name = 32;
+        let padding_date = 25;
+        let padding_id = 11;
 
-        return format!("┌{id:─^padding_id$}┐ ┌{date:─^padding_date$}┐ ┌{name:─^padding_name$}┐");
+        return format!("┌{name:─^padding_name$}┐ ┌{date:─^padding_date$}┐ ┌{id:─^padding_id$}┐ ");
     }
 }
 
@@ -599,7 +621,7 @@ fn release_selection(selections: Vec<Release>) -> Result<usize, PublishError> {
         .map(|release| {
             let r = MyceliaRelease {
                 id: release.id,
-                name: release.name,
+                tag_name: release.tag_name,
                 created_at: release.created_at,
             };
             return r;
@@ -618,12 +640,13 @@ fn release_selection(selections: Vec<Release>) -> Result<usize, PublishError> {
     };
 }
 
-fn publish_pkg(version: Version) -> Result<(), PublishError> {
+fn publish_pkg(release: Release) -> Result<(), PublishError> {
     let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
-
+    let version =
+        Version::parse(&release.tag_name).expect("Could not cast Release tag_name to Version");
     let rustwrap = Command::new(rustwrap)
         .current_dir(project_root())
-        .args(["--tag", &version.to_string()])
+        .args(["--tag", version.to_string().as_str()])
         .status()
         .expect("Failed to publish package");
 
@@ -652,4 +675,8 @@ fn dir_components() -> PathBuf {
 
 fn dir_guests() -> PathBuf {
     project_root().join("guests")
+}
+
+fn file_rustwrap() -> PathBuf {
+    project_root().join("rustwrap.yaml")
 }
