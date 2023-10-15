@@ -36,7 +36,7 @@ pub mod publish {
         let selection = &releases[selection];
 
         replace_all_in_file(file_rustwrap(), "__VERSION__", &selection.tag_name);
-        publish_pkg(selection);
+        publish_pkg(&selection)?;
 
         Ok(())
     }
@@ -51,6 +51,7 @@ pub mod publish {
             .truncate(true)
             .open(path)
             .expect("Could not open file: {path}");
+
         file.write(new.as_bytes())
             .expect("Could not write file: {path}");
     }
@@ -71,13 +72,13 @@ pub mod publish {
     }
 
     #[derive(Debug)]
-    struct MyceliaRelease {
+    struct GitHubRelease {
         id: ReleaseId,
         tag_name: String,
         created_at: Option<DateTime<Utc>>,
     }
 
-    impl ToString for MyceliaRelease {
+    impl ToString for GitHubRelease {
         fn to_string(&self) -> String {
             let id = self.id;
             let date = self
@@ -99,7 +100,7 @@ pub mod publish {
         let selections: Vec<_> = selections
             .into_iter()
             .map(|release| {
-                let r = MyceliaRelease {
+                let r = GitHubRelease {
                     id: release.id,
                     tag_name: release.tag_name,
                     created_at: release.created_at,
@@ -120,7 +121,7 @@ pub mod publish {
         };
     }
 
-    fn publish_pkg(release: Release) -> Result<(), PublishError> {
+    fn publish_pkg(release: &Release) -> Result<(), PublishError> {
         let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
         let version =
             Version::parse(&release.tag_name).expect("Could not cast Release tag_name to Version");
