@@ -179,7 +179,6 @@ pub mod release {
                 format!("releases/{}", tag.to_string()).as_str(),
                 "--title",
                 format!("Release {}", tag.to_string()).as_str(),
-                "--verify-tag",
             ])
             .status()
             .expect("Failed to create GitHub pull request");
