@@ -1,16 +1,14 @@
 pub mod build {
-    use std::{
-        cmp::Ordering,
-        collections::HashMap,
-        env, fs,
-        path::{Path, PathBuf},
-        process::Command,
-    };
+
+    use crate::paths::paths;
+
+    use std::{cmp::Ordering, collections::HashMap, env, fs, path::PathBuf, process::Command};
     use thiserror::Error;
+    type DynError = Box<dyn std::error::Error>;
 
     pub fn build() -> Result<(), DynError> {
-        fs::create_dir_all(&dir_target())?;
-        fs::create_dir_all(&dir_components())?;
+        fs::create_dir_all(&paths::dir_target())?;
+        fs::create_dir_all(&paths::dir_components())?;
 
         for guest in guests() {
             wasm(&guest)?;
@@ -48,7 +46,7 @@ pub mod build {
     //   - name_output: used for build when defined in `name_map`
     // 4. Order the items by priority. Because packages like `function` should be built last
     fn guests() -> Vec<Guest> {
-        let dir = fs::read_dir(&dir_guests()).unwrap();
+        let dir = fs::read_dir(&paths::dir_guests()).unwrap();
         let name_map = HashMap::from([("function", "mycelia_guest_function")]);
         let priority = vec!["*".to_string(), "function".to_string()];
 
@@ -56,7 +54,11 @@ pub mod build {
             .map(|p| p.unwrap().path())
             .filter(|p| p.is_dir())
             .map(|p| {
-                let name = p.strip_prefix(&dir_guests()).unwrap().to_str().unwrap();
+                let name = p
+                    .strip_prefix(&paths::dir_guests())
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
                 let name_output = name_map.get(name);
                 return Guest::new(p.clone(), name, name_output.copied());
             })
@@ -78,13 +80,13 @@ pub mod build {
 
     fn workspace() -> Result<(), BuildError> {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-        let status = Command::new(cargo)
-            .current_dir(project_root())
+        let build_workspace_cmd = Command::new(cargo)
+            .current_dir(paths::project_root())
             .args(["build", "--workspace"])
             .status()
             .expect("Failed to build workspace");
 
-        return match status.code() {
+        return match build_workspace_cmd.code() {
             Some(0) => Ok(()),
             Some(code) => Err(BuildError::Workspace { status: code }),
             None => Ok(()),
@@ -95,7 +97,7 @@ pub mod build {
     // fn workspace_release() -> Result<(), ReleaseError> {
     //     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     //     let cargo_build = Command::new(cargo)
-    //         .current_dir(project_root())
+    //         .current_dir(paths::project_root())
     //         .args(["build", "--workspace", "--release"])
     //         .status()
     //         .expect("Failed to build workspace");
@@ -109,8 +111,8 @@ pub mod build {
 
     fn wasm(guest: &Guest) -> Result<(), BuildError> {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-        let wasm = Command::new(cargo)
-            .current_dir(project_root())
+        let build_wasm_cmd = Command::new(cargo)
+            .current_dir(paths::project_root())
             .args([
                 "build",
                 "--target=wasm32-wasi",
@@ -120,7 +122,7 @@ pub mod build {
             .status()
             .expect("Failed to build wasm guest");
 
-        return match wasm.code() {
+        return match build_wasm_cmd.code() {
             Some(0) => Ok(()),
             Some(status) => {
                 let guest = guest.clone();
@@ -138,7 +140,7 @@ pub mod build {
         let wasm_tools = env::var("WASM_TOOLS").unwrap_or_else(|_| "wasm-tools".to_string());
 
         let path_wasm_guest =
-            dir_target().join(format!("wasm32-wasi/release/{}.wasm", guest.name_output));
+            paths::dir_target().join(format!("wasm32-wasi/release/{}.wasm", guest.name_output));
         if !path_wasm_guest.exists() {
             let guest = guest.clone();
             return Err(BuildError::GuestFileNonExistent {
@@ -147,7 +149,7 @@ pub mod build {
             });
         }
 
-        let path_wasi_snapshot = project_root().join("wasi_snapshot_preview1.reactor.wasm.dev");
+        let path_wasi_snapshot = paths::file_wasi_snapshot();
         if !path_wasi_snapshot.exists() {
             let guest = guest.clone();
             return Err(BuildError::WasiSnapshotFileNonExistent {
@@ -156,10 +158,10 @@ pub mod build {
             });
         }
 
-        if !&dir_components().exists() {
+        if !&paths::dir_components().exists() {
             let guest = guest.clone();
             return Err(BuildError::DirComponentsNonExistent {
-                dir: dir_components(),
+                dir: paths::dir_components(),
                 guest_name: guest.name,
             });
         }
@@ -168,12 +170,12 @@ pub mod build {
         let cmd_wasi_snapshot = format!("--adapt={}", path_wasi_snapshot.display());
         let cmd_component_output = format!(
             "-o={}/{}-component.wasm",
-            &dir_components().display(),
+            &paths::dir_components().display(),
             guest.name
         );
 
-        let wasm_tools = Command::new(wasm_tools)
-            .current_dir(project_root())
+        let wasm_tools_cmd = Command::new(wasm_tools)
+            .current_dir(paths::project_root())
             .args([
                 "component",
                 "new",
@@ -184,7 +186,7 @@ pub mod build {
             .status()
             .expect("Failed to build component with wasm_tools");
 
-        return match wasm_tools.code() {
+        return match wasm_tools_cmd.code() {
             Some(0) => Ok(()),
             Some(status) => {
                 let guest = guest.clone();
@@ -192,7 +194,7 @@ pub mod build {
                     guest_name: guest.name,
                     path_wasm_guest,
                     path_wasi_snapshot,
-                    dir_components: dir_components(),
+                    dir_components: paths::dir_components(),
                     guest_path: guest.path,
                     status,
                 });
@@ -200,28 +202,6 @@ pub mod build {
             None => Ok(()),
         };
     }
-
-    fn project_root() -> PathBuf {
-        Path::new(&env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(1)
-            .unwrap()
-            .to_path_buf()
-    }
-
-    fn dir_target() -> PathBuf {
-        project_root().join("target")
-    }
-
-    fn dir_components() -> PathBuf {
-        project_root().join("components")
-    }
-
-    fn dir_guests() -> PathBuf {
-        project_root().join("guests")
-    }
-
-    type DynError = Box<dyn std::error::Error>;
 
     #[derive(Debug, Error)]
     enum BuildError {
