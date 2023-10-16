@@ -6,7 +6,7 @@ pub mod publish {
     use log::{error, info};
     use octocrab::{self, models::repos::Release, models::ReleaseId, Error};
     use semver::Version;
-    use std::{env, fs, fs::OpenOptions, io::Write, path::PathBuf, process::Command};
+    use std::{env, process::Command};
     use thiserror::Error;
 
     pub async fn publish() -> Result<(), PublishError> {
@@ -31,26 +31,9 @@ pub mod publish {
         let selection = selection.expect("Release selection error");
         let selection = &releases[selection];
 
-        replace_all_in_file(paths::file_rustwrap(), "__VERSION__", &selection.tag_name);
         publish_pkg(&selection)?;
 
         Ok(())
-    }
-
-    // TODO: move to release mod so that it is included in the release
-    fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
-        let contents = fs::read_to_string(path.clone()).expect("Could not read file: {path?}");
-        let new = contents.replace(from, to);
-        dbg!(&contents, &new);
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(path)
-            .expect("Could not open file: {path}");
-
-        file.write(new.as_bytes())
-            .expect("Could not write file: {path}");
     }
 
     async fn github_release_list() -> Result<octocrab::Page<Release>, octocrab::Error> {
