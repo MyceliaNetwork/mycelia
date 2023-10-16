@@ -1,15 +1,17 @@
 pub mod release {
+    use crate::paths::paths;
+
     use log::error;
     use semver::Version;
 
     type DynError = Box<dyn std::error::Error>;
-    enum Branch<'a> {
+    pub enum Branch<'a> {
         Back(&'a Version),
         Tag(&'a Version),
     }
 
-    pub async fn release() -> Result<(), DynError> {
-        if let Err(error) = try_release().await {
+    pub fn release() -> Result<(), DynError> {
+        if let Err(error) = try_release() {
             error!("{error:#}");
 
             std::process::exit(-1);
@@ -18,11 +20,17 @@ pub mod release {
         Ok(())
     }
 
-    async fn try_release() -> Result<(), DynError> {
+    fn try_release() -> Result<(), DynError> {
         workspace::bump()?;
 
         let tag = workspace::parse_cargo_pkg_version();
+
         // let current_branch = git::branch_show_current();
+        workspace::replace_all_in_file(
+            paths::file_rustwrap(),
+            "__VERSION__",
+            tag.to_string().as_str(),
+        );
 
         git::create_branch(tag.clone())?;
         git::switch_branch(Branch::Tag(&tag))?;
@@ -39,7 +47,7 @@ pub mod release {
         use crate::paths::paths;
         use cargo_metadata::MetadataCommand;
         use semver::Version;
-        use std::{env, process::Command};
+        use std::{env, fs, fs::OpenOptions, io::Write, path::PathBuf, process::Command};
         use thiserror::Error;
 
         // HACK: cargo's fill_env is called upon build, but after cargo-workspaces
@@ -82,6 +90,21 @@ pub mod release {
             };
         }
 
+        pub fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
+            let contents = fs::read_to_string(path.clone()).expect("Could not read file: {path?}");
+            let new = contents.replace(from, to);
+            dbg!(&contents, &new);
+
+            let mut file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(path)
+                .expect("Could not open file: {path}");
+
+            file.write(new.as_bytes())
+                .expect("Could not write file: {path}");
+        }
+
         #[derive(Debug, Error)]
         pub enum WorkspaceError {
             #[error("cargo-workspace failed. Status code: {status}")]
@@ -97,10 +120,11 @@ pub mod release {
         use thiserror::Error;
 
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
-            let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let username = config_user_name();
+            let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let create_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
-                .args(["branch", format!("releases/{}", tag).as_str()])
+                .args(["branch", format!("releases/{username}:{tag}").as_str()])
                 .status()
                 .expect("Failed to create git branch");
 
@@ -113,9 +137,10 @@ pub mod release {
 
         pub fn switch_branch(branch: Branch) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let username = config_user_name();
             let branch_arg = match branch {
                 Branch::Back(_) => "-".to_string(),
-                Branch::Tag(tag) => format!("releases/{}", tag.to_string()),
+                Branch::Tag(tag) => format!("releases/{username}:{tag}").to_string(),
             };
             let tag = match branch {
                 Branch::Back(tag) => tag,
@@ -160,7 +185,7 @@ pub mod release {
 
         pub fn commit(tag: Version) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let commit_msg = format!("Release {}", tag);
+            let commit_msg = format!("Release {tag}");
             let git_commit_cmd = Command::new(git)
                 .current_dir(paths::project_root())
                 .args(&["commit", "-m", commit_msg.as_str()])
@@ -176,11 +201,14 @@ pub mod release {
 
         pub fn push_branch(tag: Version) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let username = config_user_name();
+            let branch_name = format!("releases/{username}:{tag}").to_string();
+            let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
-                .args(["push", "-u", "origin", format!("releases/{}", tag).as_str()])
+                .args(["push", "-u", "origin", branch_name])
                 .status()
-                .expect(format!("Failed to run `git push -u origin release/{tag}").as_str());
+                .expect(format!("Failed to run `git push -u origin {branch_name}").as_str());
 
             return match git_push_branch_cmd.code() {
                 Some(0) => Ok(()),
