@@ -285,8 +285,9 @@ pub mod release {
                     "--assignee",
                     "@me",
                     "--fill",
-                    "--base",
-                    branch_name.as_str(),
+                    // "--base",
+                    // branch_name.as_str(),
+
                     // "--title",
                     // format!("Release {}", tag.to_string()).as_str(),
                     // "--body",
