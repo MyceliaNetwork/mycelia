@@ -1,5 +1,4 @@
 pub mod release {
-    use crate::paths::paths;
 
     use log::error;
     use semver::Version;
@@ -21,24 +20,25 @@ pub mod release {
     }
 
     fn try_release() -> Result<(), DynError> {
-        workspace::bump()?;
+        git::status();
+        // workspace::bump()?;
 
-        let tag = workspace::parse_cargo_pkg_version();
+        // let tag = workspace::parse_cargo_pkg_version();
 
-        // let current_branch = git::branch_show_current();
-        workspace::replace_all_in_file(
-            paths::file_rustwrap(),
-            "__VERSION__",
-            tag.to_string().as_str(),
-        );
+        // // let current_branch = git::branch_show_current();
+        // workspace::replace_all_in_file(
+        //     paths::file_rustwrap(),
+        //     "__VERSION__",
+        //     tag.to_string().as_str(),
+        // );
 
-        git::create_branch(tag.clone())?;
-        git::switch_branch(Branch::Tag(&tag))?;
-        git::add_all(tag.clone())?;
-        git::commit(tag.clone())?;
-        git::push_branch(tag.clone())?;
-        github::pr_create(tag.clone())?;
-        github::release_create(tag.clone())?;
+        // git::create_branch(tag.clone())?;
+        // git::switch_branch(Branch::Tag(&tag))?;
+        // git::add_all(tag.clone())?;
+        // git::commit(tag.clone())?;
+        // git::push_branch(tag.clone())?;
+        // github::pr_create(tag.clone())?;
+        // github::release_create(tag.clone())?;
 
         Ok::<(), DynError>(())
     }
@@ -113,9 +113,45 @@ pub mod release {
         use crate::release::release::github;
         use crate::release::release::Branch;
 
+        use log::info;
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
+
+        pub fn status() -> Result<(), GitError> {
+            let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let status_cmd = Command::new(git)
+                .current_dir(paths::project_root())
+                .args(["status"])
+                .status()
+                .expect("`git status` failed");
+
+            info!("{status_cmd:#?}");
+
+            return match status_cmd.code() {
+                Some(0) => {
+                    print!("0000000");
+                    Ok(())
+                }
+                Some(status) => {
+                    println!(
+                        "
+
+
+                    {status}
+
+
+                "
+                    );
+                    Err(GitError::Status { status })
+                }
+                None => {
+                    print!("None");
+                    Ok(())
+                }
+            };
+            // let status = String::from_utf8(status_cmd).expect("Failed to convert status to utf-8");
+        }
 
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
@@ -239,6 +275,8 @@ pub mod release {
 
         #[derive(Debug, Error)]
         pub enum GitError {
+            #[error("`git status` failed. Please commit your changes before release. Status code: {status}")]
+            Status { status: i32 },
             #[error("`git branch releases/{tag}` failed. Status code: {status}")]
             CreateBranch { tag: Version, status: i32 },
             #[error("`git switch releases/{tag}` failed. Status code: {status}")]
