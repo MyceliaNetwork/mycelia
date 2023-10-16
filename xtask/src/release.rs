@@ -65,9 +65,7 @@ pub mod release {
             return tag.clone();
         }
 
-        // TODO: replace DynError
         pub fn bump() -> Result<(), WorkspaceError> {
-            // cargo workspaces tag --allow-branch dani_cargo_run_new_cmd --no-git-push
             let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
             let cargo_workspaces_version_cmd = Command::new(cargo)
                 .current_dir(paths::project_root())
@@ -77,8 +75,6 @@ pub mod release {
                     // TODO: uncomment on merge
                     // "--allow-branch",
                     // "releases/*",
-                    // TODO: delete on merge
-                    "--no-git-commit",
                 ])
                 .status()
                 .expect("Failed to run `cargo workspaces version --allow-branch releases/*`");
@@ -93,7 +89,6 @@ pub mod release {
         pub fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
             let contents = fs::read_to_string(path.clone()).expect("Could not read file: {path?}");
             let new = contents.replace(from, to);
-            dbg!(&contents, &new);
 
             let mut file = OpenOptions::new()
                 .write(true)
@@ -120,13 +115,14 @@ pub mod release {
         use thiserror::Error;
 
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
-            let username = config_user_name();
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let username = config_user_name();
+            let branch_name = format!("releases/{username}:{tag}");
             let create_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
-                .args(["branch", format!("releases/{username}:{tag}").as_str()])
+                .args(["branch", branch_name.as_str()])
                 .status()
-                .expect("Failed to create git branch");
+                .expect(format!("`git branch {branch_name}` failed").as_str());
 
             return match create_branch_cmd.code() {
                 Some(0) => Ok(()),
