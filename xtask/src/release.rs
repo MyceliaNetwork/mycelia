@@ -269,13 +269,15 @@ pub mod release {
                 .args([
                     "pr",
                     "create",
-                    "--fill",
                     "--assignee",
+                    "--fill",
                     "@me",
                     "--base",
                     branch_name.as_str(),
-                    "--title",
-                    format!("Release {}", tag.to_string()).as_str(),
+                    // "--title",
+                    // format!("Release {}", tag.to_string()).as_str(),
+                    // "--body",
+                    // format!("Release {}", tag.to_string()).as_str(),
                 ])
                 .status()
                 .expect("Failed to create GitHub pull request");
