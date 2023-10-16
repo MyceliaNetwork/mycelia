@@ -3,6 +3,7 @@ use log::{error, info};
 use std::env;
 
 mod build;
+mod paths;
 mod publish;
 mod release;
 
@@ -36,7 +37,7 @@ async fn try_main() -> Result<(), DynError> {
         _ => print_help(),
     }
 
-    Ok(())
+    Ok::<(), DynError>(())
 }
 
 fn print_help() {

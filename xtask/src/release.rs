@@ -1,15 +1,14 @@
 pub mod release {
-    use cargo_metadata::MetadataCommand;
     use log::error;
     use semver::Version;
-    use std::{
-        env,
-        path::{Path, PathBuf},
-        process::Command,
-    };
-    use thiserror::Error;
 
-    pub async fn release() -> Result<(), ReleaseError> {
+    type DynError = Box<dyn std::error::Error>;
+    enum Branch<'a> {
+        Back(&'a Version),
+        Tag(&'a Version),
+    }
+
+    pub async fn release() -> Result<(), DynError> {
         if let Err(error) = try_release().await {
             error!("{error:#}");
 
@@ -19,223 +18,286 @@ pub mod release {
         Ok(())
     }
 
-    async fn try_release() -> Result<(), ReleaseError> {
-        bump()?;
+    async fn try_release() -> Result<(), DynError> {
+        workspace::bump()?;
 
-        let tag = parse_cargo_pkg_tag();
+        let tag = workspace::parse_cargo_pkg_version();
+        // let current_branch = git::branch_show_current();
 
-        git_create_branch(tag.clone())?;
-        git_switch_branch(tag.clone(), false)?;
-        git_add_all(tag.clone())?;
-        git_commit(tag.clone())?;
-        git_push_branch(tag.clone())?;
-        github_pr_create(tag.clone())?;
-        github_release_create(tag.clone())?;
+        git::create_branch(tag.clone())?;
+        git::switch_branch(Branch::Tag(&tag))?;
+        git::add_all(tag.clone())?;
+        git::commit(tag.clone())?;
+        git::push_branch(tag.clone())?;
+        github::pr_create(tag.clone())?;
+        github::release_create(tag.clone())?;
 
-        Ok(())
+        Ok::<(), DynError>(())
     }
 
-    // HACK: cargo's fill_env is called upon build, but after cargo-workspaces
-    // updates the tag this is not reflected in the env variable.
-    fn parse_cargo_pkg_tag() -> Version {
-        let path = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        let meta = MetadataCommand::new()
-            .manifest_path("./Cargo.toml")
-            .current_dir(&path)
-            .exec()
-            .unwrap();
+    mod workspace {
+        use crate::paths::paths;
+        use cargo_metadata::MetadataCommand;
+        use semver::Version;
+        use std::{env, process::Command};
+        use thiserror::Error;
 
-        let root = meta.root_package().unwrap();
-        let tag = &root.version;
-        return tag.clone();
+        // HACK: cargo's fill_env is called upon build, but after cargo-workspaces
+        // updates the tag this is not reflected in the env variable.
+        pub fn parse_cargo_pkg_version() -> Version {
+            let path = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+            let meta_cmd = MetadataCommand::new()
+                .manifest_path("./Cargo.toml")
+                .current_dir(&path)
+                .exec()
+                .expect("Failed to read CARGO_MANIFEST_DIR/Cargo.toml");
+
+            let root = meta_cmd.root_package().unwrap();
+            let tag = &root.version;
+            return tag.clone();
+        }
+
+        // TODO: replace DynError
+        pub fn bump() -> Result<(), WorkspaceError> {
+            // cargo workspaces tag --allow-branch dani_cargo_run_new_cmd --no-git-push
+            let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+            let cargo_workspaces_version_cmd = Command::new(cargo)
+                .current_dir(paths::project_root())
+                .args([
+                    "workspaces",
+                    "version",
+                    // TODO: uncomment on merge
+                    // "--allow-branch",
+                    // "releases/*",
+                    // TODO: delete on merge
+                    "--no-git-commit",
+                ])
+                .status()
+                .expect("Failed to run `cargo workspaces version --allow-branch releases/*`");
+
+            return match cargo_workspaces_version_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => Err(WorkspaceError::CargoWorkspace { status }),
+                None => Ok(()),
+            };
+        }
+
+        #[derive(Debug, Error)]
+        pub enum WorkspaceError {
+            #[error("cargo-workspace failed. Status code: {status}")]
+            CargoWorkspace { status: i32 },
+        }
     }
 
-    // TODO: replace DynError
-    fn bump() -> Result<(), ReleaseError> {
-        // cargo workspaces tag --allow-branch dani_cargo_run_new_cmd --no-git-push
-        let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-        let cargo_ws_tag = Command::new(cargo)
-            .current_dir(project_root())
-            .args([
-                "workspaces",
-                "version",
-                // TODO: uncomment on merge
-                // "--allow-branch",
-                // "releases/*",
-                // TODO: delete on merge
-                "--no-git-commit",
-            ])
-            .status()
-            .expect("Failed to bump workspaces tag");
+    pub mod git {
+        use crate::paths::paths;
+        use crate::release::release::Branch;
+        use semver::Version;
+        use std::{env, process::Command};
+        use thiserror::Error;
 
-        return match cargo_ws_tag.code() {
-            Some(0) => Ok(()),
-            Some(status) => Err(ReleaseError::CargoWorkspace { status }),
-            None => Ok(()),
-        };
-    }
+        pub fn create_branch(tag: Version) -> Result<(), GitError> {
+            let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let create_branch_cmd = Command::new(git)
+                .current_dir(paths::project_root())
+                .args(["branch", format!("releases/{}", tag).as_str()])
+                .status()
+                .expect("Failed to create git branch");
 
-    fn git_create_branch(tag: Version) -> Result<(), ReleaseError> {
-        let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-        let create_branch = Command::new(git)
-            .current_dir(project_root())
-            .args(["branch", format!("releases/{}", tag).as_str()])
-            .status()
-            .expect("Failed to create git branch");
+            return match create_branch_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => Err(GitError::CreateBranch { tag, status }),
+                None => Ok(()),
+            };
+        }
 
-        return match create_branch.code() {
-            Some(0) => Ok(()),
-            Some(status) => Err(ReleaseError::GitCreateBranch { tag, status }),
-            None => Ok(()),
-        };
-    }
+        pub fn switch_branch(branch: Branch) -> Result<(), GitError> {
+            let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let branch_arg = match branch {
+                Branch::Back(_) => "-".to_string(),
+                Branch::Tag(tag) => format!("releases/{}", tag.to_string()),
+            };
+            let tag = match branch {
+                Branch::Back(tag) => tag,
+                Branch::Tag(tag) => tag,
+            };
+            let git_switch_branch_cmd = Command::new(git)
+                .current_dir(paths::project_root())
+                .args(["switch", branch_arg.as_str()])
+                .status()
+                .expect(format!("Failed to run `git switch {branch_arg}").as_str());
 
-    fn git_switch_branch(tag: Version, switch_back: bool) -> Result<(), ReleaseError> {
-        let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-        let branch = match switch_back {
-            true => "-".to_string(),
-            false => format!("releases/{}", tag.to_string()),
-        };
-        let switch_branch = Command::new(git)
-            .current_dir(project_root())
-            .args(["switch", branch.as_str()])
-            .status()
-            .expect("Failed to switch git branch");
-
-        return match switch_branch.code() {
-            Some(0) => Ok(()),
-            Some(status) => {
-                let branch_already_exists: i32 = 128;
-                if status == branch_already_exists {
-                    let tag = tag.clone();
-                    git_switch_branch(tag, true)?;
+            return match git_switch_branch_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => {
+                    let branch_already_exists: i32 = 128;
+                    if status == branch_already_exists {
+                        switch_branch(Branch::Back(tag))?;
+                    }
+                    return Err(GitError::SwitchBranch {
+                        tag: tag.clone(),
+                        status: branch_already_exists,
+                    });
                 }
-                return Err(ReleaseError::GitSwitchBranch {
-                    tag: tag.clone(),
-                    status: branch_already_exists,
-                });
-            }
-            None => Ok(()),
-        };
+                None => Ok(()),
+            };
+        }
+
+        pub fn add_all(tag: Version) -> Result<(), GitError> {
+            let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let git_add_all_cmd = Command::new(git)
+                .current_dir(paths::project_root())
+                .args(&["add", "."])
+                .status()
+                .expect("Failed to run `git add .`");
+
+            return match git_add_all_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => Err(GitError::AddAll { tag, status }),
+                None => Ok(()),
+            };
+        }
+
+        pub fn commit(tag: Version) -> Result<(), GitError> {
+            let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let commit_msg = format!("Release {}", tag);
+            let git_commit_cmd = Command::new(git)
+                .current_dir(paths::project_root())
+                .args(&["commit", "-m", commit_msg.as_str()])
+                .status()
+                .expect(format!("failed to run `git commit -m {commit_msg}").as_str());
+
+            return match git_commit_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => Err(GitError::Commit { tag, status }),
+                None => Ok(()),
+            };
+        }
+
+        pub fn push_branch(tag: Version) -> Result<(), GitError> {
+            let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            let git_push_branch_cmd = Command::new(git)
+                .current_dir(paths::project_root())
+                .args(["push", "-u", "origin", format!("releases/{}", tag).as_str()])
+                .status()
+                .expect(format!("Failed to run `git push -u origin release/{tag}").as_str());
+
+            return match git_push_branch_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => {
+                    let branch_already_exists: i32 = 128;
+                    if status == branch_already_exists {
+                        switch_branch(Branch::Back(&tag))?;
+                    }
+                    return Err(GitError::PushBranch {
+                        tag: tag.clone(),
+                        status: branch_already_exists,
+                    });
+                }
+                None => Ok(()),
+            };
+        }
+
+        pub fn branch_show_current() -> String {
+            let git_branch_show_current_cmd = Command::new("git")
+                .args(["branch", "--show-current"])
+                .output()
+                .expect("failed to run `git branch --show-current`")
+                .stdout;
+
+            let current_branch = String::from_utf8(git_branch_show_current_cmd)
+                .expect("Failed to convert branch name to utf-8");
+            current_branch.trim().to_owned()
+        }
+
+        pub fn config_user_name() -> String {
+            let git_config_user_name_cmd = Command::new("git")
+                .args(["config", "user.name"])
+                .output()
+                .expect("failed to run `git config user.name`")
+                .stdout;
+
+            let user = String::from_utf8(git_config_user_name_cmd)
+                .expect("Failed to convert user name to utf-8");
+
+            user.trim().to_owned()
+        }
+
+        #[derive(Debug, Error)]
+        pub enum GitError {
+            #[error("`git branch releases/{tag}` failed. Status code: {status}")]
+            CreateBranch { tag: Version, status: i32 },
+            #[error("`git switch releases/{tag}` failed. Status code: {status}")]
+            SwitchBranch { tag: Version, status: i32 },
+            #[error("`git add .` failed for tag {tag}. Status code: {status}")]
+            AddAll { tag: Version, status: i32 },
+            #[error("`commit -m \"Release {tag:}\"` failed. Status code: {status:}")]
+            Commit { tag: Version, status: i32 },
+            #[error("`git push origin -u releases/{tag}` failed. Status code: {status}")]
+            PushBranch { tag: Version, status: i32 },
+        }
     }
 
-    fn git_add_all(tag: Version) -> Result<(), ReleaseError> {
-        let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-        let add_all = Command::new(git)
-            .current_dir(project_root())
-            .args(&["add", "."])
-            .status()
-            .expect("`git add .` failed");
+    pub mod github {
+        use crate::paths::paths;
+        use semver::Version;
+        use std::{env, process::Command};
+        use thiserror::Error;
 
-        return match add_all.code() {
-            Some(0) => Ok(()),
-            Some(status) => Err(ReleaseError::GitAddAll { tag, status }),
-            None => Ok(()),
-        };
-    }
+        pub fn pr_create(tag: Version) -> Result<(), GitHubError> {
+            let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+            let github_pr_create_cmd = Command::new(github)
+                .current_dir(paths::project_root())
+                .args([
+                    "pr",
+                    "create",
+                    "--fill",
+                    "--assignee",
+                    "@me",
+                    "--base",
+                    format!("releases/{}", tag.to_string()).as_str(),
+                    "--title",
+                    format!("Release {}", tag.to_string()).as_str(),
+                ])
+                .status()
+                .expect("Failed to create GitHub pull request");
 
-    fn git_commit(tag: Version) -> Result<(), ReleaseError> {
-        let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-        let commit_msg = format!("Release {}", tag);
-        let commit = Command::new(git)
-            .current_dir(project_root())
-            .args(&["commit", "-m", commit_msg.as_str()])
-            .status()
-            .expect("`git commit -m {commit_msg}");
+            return match github_pr_create_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => Err(GitHubError::CreatePullRequest { status, tag }),
+                None => Ok(()),
+            };
+        }
 
-        return match commit.code() {
-            Some(0) => Ok(()),
-            Some(status) => Err(ReleaseError::GitCommit { tag, status }),
-            None => Ok(()),
-        };
-    }
+        pub fn release_create(tag: Version) -> Result<(), GitHubError> {
+            let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+            let github_release_create_cmd = Command::new(github)
+                .current_dir(paths::project_root())
+                .args([
+                    "release",
+                    "create",
+                    "--prerelease", // TODO: remove this flag when we are ready for a stable release
+                    "--generate-notes",
+                ])
+                .status()
+                .expect("Failed to create GitHub release");
 
-    fn git_push_branch(tag: Version) -> Result<(), ReleaseError> {
-        let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-        let push_branch = Command::new(git)
-            .current_dir(project_root())
-            .args(["push", "-u", "origin", format!("releases/{}", tag).as_str()])
-            .status()
-            .expect("Failed to push git branch");
+            return match github_release_create_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => Err(GitHubError::ReleaseCreate { tag, status }),
+                None => Ok(()),
+            };
+        }
 
-        return match push_branch.code() {
-            Some(0) => Ok(()),
-            Some(status) => Err(ReleaseError::GitPushBranch { status, tag }),
-            None => Ok(()),
-        };
-    }
-
-    fn github_pr_create(tag: Version) -> Result<(), ReleaseError> {
-        let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-        let create_pr = Command::new(github)
-            .current_dir(project_root())
-            .args([
-                "pr",
-                "create",
-                "--fill",
-                "--assignee",
-                "@me",
-                "--base",
-                format!("releases/{}", tag.to_string()).as_str(),
-                "--title",
-                format!("Release {}", tag.to_string()).as_str(),
-            ])
-            .status()
-            .expect("Failed to create GitHub pull request");
-
-        return match create_pr.code() {
-            Some(0) => Ok(()),
-            Some(status) => Err(ReleaseError::GitHubCreatePullRequest { status, tag }),
-            None => Ok(()),
-        };
-    }
-
-    fn github_release_create(tag: Version) -> Result<(), ReleaseError> {
-        let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-        let create_release = Command::new(github)
-            .current_dir(project_root())
-            .args([
-                "release",
-                "create",
-                "--prerelease", // TODO: remove this flag when we are ready for a stable release
-                "--generate-notes",
-            ])
-            .status()
-            .expect("Failed to create GitHub release");
-
-        return match create_release.code() {
-            Some(0) => Ok(()),
-            Some(status) => Err(ReleaseError::GitHubReleaseCreate { tag, status }),
-            None => Ok(()),
-        };
-    }
-
-    fn project_root() -> PathBuf {
-        Path::new(&env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(1)
-            .unwrap()
-            .to_path_buf()
-    }
-
-    #[derive(Debug, Error)]
-    pub enum ReleaseError {
-        #[error("cargo-workspace failed. Status code: {status}")]
-        CargoWorkspace { status: i32 },
-        #[error("`git branch releases/{tag}` failed. Status code: {status}")]
-        GitCreateBranch { tag: Version, status: i32 },
-        #[error("`git switch releases/{tag}` failed. Status code: {status}")]
-        GitSwitchBranch { tag: Version, status: i32 },
-        #[error("`git add .` failed for tag {tag}. Status code: {status}")]
-        GitAddAll { tag: Version, status: i32 },
-        #[error("`commit -m \"Release {tag:}\"` failed. Status code: {status:}")]
-        GitCommit { tag: Version, status: i32 },
-        #[error("`git push origin -u releases/{tag}` failed. Status code: {status}")]
-        GitPushBranch { tag: Version, status: i32 },
-        #[error("`gh pr create --fill --base releases/{tag} --assignee @me --title \"Release {tag}\"` failed. Status code: {status}" )]
-        GitHubCreatePullRequest { tag: Version, status: i32 },
-        // TODO: update final command
-        #[error("`gh release create --prerelease --generate-notes` failed. Status code: {status}")]
-        GitHubReleaseCreate { tag: Version, status: i32 },
+        #[derive(Debug, Error)]
+        pub enum GitHubError {
+            #[error("`gh pr create --fill --base releases/{tag} --assignee @me --title \"Release {tag}\"` failed. Status code: {status}" )]
+            CreatePullRequest { tag: Version, status: i32 },
+            // TODO: update final command
+            #[error(
+                "`gh release create --prerelease --generate-notes` failed. Status code: {status}"
+            )]
+            ReleaseCreate { tag: Version, status: i32 },
+        }
     }
 }

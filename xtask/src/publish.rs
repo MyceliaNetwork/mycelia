@@ -1,16 +1,12 @@
 pub mod publish {
+    use crate::paths::paths;
+
     use chrono::{DateTime, Utc};
     use dialoguer::{theme::ColorfulTheme, Select};
     use log::{error, info};
     use octocrab::{self, models::repos::Release, models::ReleaseId, Error};
     use semver::Version;
-    use std::{
-        env, fs,
-        fs::OpenOptions,
-        io::Write,
-        path::{Path, PathBuf},
-        process::Command,
-    };
+    use std::{env, fs, fs::OpenOptions, io::Write, path::PathBuf, process::Command};
     use thiserror::Error;
 
     pub async fn publish() -> Result<(), PublishError> {
@@ -28,19 +24,20 @@ pub mod publish {
         let releases = github_release_list().await;
         let releases = match releases {
             Ok(releases) => releases,
-            Err(cause) => return Err(PublishError::ReleasesError { cause }),
+            Err(cause) => return Err(PublishError::ReleasePageSelection { cause }),
         };
         let releases = releases.items;
         let selection = release_selection(releases.clone());
         let selection = selection.expect("Release selection error");
         let selection = &releases[selection];
 
-        replace_all_in_file(file_rustwrap(), "__VERSION__", &selection.tag_name);
+        replace_all_in_file(paths::file_rustwrap(), "__VERSION__", &selection.tag_name);
         publish_pkg(&selection)?;
 
         Ok(())
     }
 
+    // TODO: move to release mod so that it is included in the release
     fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
         let contents = fs::read_to_string(path.clone()).expect("Could not read file: {path?}");
         let new = contents.replace(from, to);
@@ -125,35 +122,23 @@ pub mod publish {
         let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
         let version =
             Version::parse(&release.tag_name).expect("Could not cast Release tag_name to Version");
-        let rustwrap = Command::new(rustwrap)
-            .current_dir(project_root())
+        let rustwrap_cmd = Command::new(rustwrap)
+            .current_dir(paths::project_root())
             .args(["--tag", version.to_string().as_str()])
             .status()
             .expect("Failed to publish package");
 
-        return match rustwrap.code() {
+        return match rustwrap_cmd.code() {
             Some(0) => Ok(()),
             Some(status) => Err(PublishError::Rustwrap { version, status }),
             None => Ok(()),
         };
     }
 
-    fn project_root() -> PathBuf {
-        Path::new(&env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(1)
-            .unwrap()
-            .to_path_buf()
-    }
-
-    fn file_rustwrap() -> PathBuf {
-        project_root().join("rustwrap.yaml")
-    }
-
     #[derive(Debug, Error)]
     pub enum PublishError {
-        #[error("There was an issue with Releases. Cause: {cause:#?}")]
-        ReleasesError { cause: Error },
+        #[error("There was an issue selecting release Page. Cause: {cause:#?}")]
+        ReleasePageSelection { cause: Error },
         #[error("Did not select a release")]
         DidNotSelectRelease,
         #[error("`rustwrap --tag {version}` failed. Status code: {status}")]
