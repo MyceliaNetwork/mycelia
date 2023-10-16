@@ -39,7 +39,7 @@ pub mod release {
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
         git::push_branch(tag.clone())?;
-        github::pr_create(tag.clone())?;
+        // github::pr_create(tag.clone())?;
         github::release_create(tag.clone())?;
 
         Ok::<(), DynError>(())
@@ -319,6 +319,7 @@ pub mod release {
                 .args([
                     "release",
                     "create",
+                    tag.as_str(),
                     "--target",
                     branch_name.as_str(),
                     "--prerelease", // TODO: remove this flag when we are ready for a stable release
