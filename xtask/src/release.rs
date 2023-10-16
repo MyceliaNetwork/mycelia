@@ -286,7 +286,11 @@ pub mod release {
                 Some(0) => Ok(()),
                 Some(status) => {
                     let _ = git::switch_branch(Branch::Back(&tag));
-                    Err(GitHubError::CreatePullRequest { status, tag })
+                    Err(GitHubError::CreatePullRequest {
+                        branch_name,
+                        status,
+                        tag,
+                    })
                 }
                 None => Ok(()),
             };
@@ -335,8 +339,12 @@ pub mod release {
 
         #[derive(Debug, Error)]
         pub enum GitHubError {
-            #[error("`gh pr create --fill --base releases/{tag} --assignee @me --title \"Release {tag}\"` failed. Status code: {status}" )]
-            CreatePullRequest { tag: Version, status: i32 },
+            #[error("`gh pr create --fill --base releases/{branch_name} --assignee @me --title \"Release {tag}\"` failed. Status code: {status}" )]
+            CreatePullRequest {
+                branch_name: String,
+                tag: Version,
+                status: i32,
+            },
             // TODO: update final command
             #[error(
                 "`gh release create --prerelease --generate-notes` failed. Status code: {status}"
