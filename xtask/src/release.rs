@@ -262,6 +262,8 @@ pub mod release {
 
         pub fn pr_create(tag: Version) -> Result<(), GitHubError> {
             let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+            let username = get_username();
+            let branch_name = format!("releases/{username}_{tag}").as_str();
             let github_pr_create_cmd = Command::new(github)
                 .current_dir(paths::project_root())
                 .args([
@@ -271,7 +273,7 @@ pub mod release {
                     "--assignee",
                     "@me",
                     "--base",
-                    format!("releases/{}", tag.to_string()).as_str(),
+                    branch_name,
                     "--title",
                     format!("Release {}", tag.to_string()).as_str(),
                 ])
@@ -290,11 +292,15 @@ pub mod release {
 
         pub fn release_create(tag: Version) -> Result<(), GitHubError> {
             let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+            let username = get_username();
+            let branch_name = format!("releases/{username}_{tag}").as_str();
             let github_release_create_cmd = Command::new(github)
                 .current_dir(paths::project_root())
                 .args([
                     "release",
                     "create",
+                    "--target",
+                    branch_name,
                     "--prerelease", // TODO: remove this flag when we are ready for a stable release
                     "--generate-notes",
                 ])
