@@ -109,6 +109,7 @@ pub mod release {
 
     pub mod git {
         use crate::paths::paths;
+        use crate::release::release::github;
         use crate::release::release::Branch;
         use semver::Version;
         use std::{env, process::Command};
@@ -116,7 +117,7 @@ pub mod release {
 
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = config_user_name();
+            let username = github::get_username();
             let branch_name = format!("releases/{username}:{tag}");
             let create_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
@@ -133,7 +134,7 @@ pub mod release {
 
         pub fn switch_branch(branch: Branch) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = config_user_name();
+            let username = github::get_username();
             let branch_arg = match branch {
                 Branch::Back(_) => "-".to_string(),
                 Branch::Tag(tag) => format!("releases/{username}:{tag}").to_string(),
@@ -197,7 +198,7 @@ pub mod release {
 
         pub fn push_branch(tag: Version) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = config_user_name();
+            let username = github::get_username();
             let branch_name = format!("releases/{username}:{tag}").to_string();
             let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
@@ -232,19 +233,6 @@ pub mod release {
             let current_branch = String::from_utf8(git_branch_show_current_cmd)
                 .expect("Failed to convert branch name to utf-8");
             current_branch.trim().to_owned()
-        }
-
-        pub fn config_user_name() -> String {
-            let git_config_user_name_cmd = Command::new("git")
-                .args(["config", "user.name"])
-                .output()
-                .expect("failed to run `git config user.name`")
-                .stdout;
-
-            let user = String::from_utf8(git_config_user_name_cmd)
-                .expect("Failed to convert user name to utf-8");
-
-            user.trim().to_owned()
         }
 
         #[derive(Debug, Error)]
@@ -311,6 +299,20 @@ pub mod release {
                 Some(status) => Err(GitHubError::ReleaseCreate { tag, status }),
                 None => Ok(()),
             };
+        }
+
+        pub fn get_username() -> String {
+            let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+            let get_username_cmd = Command::new(github)
+                .args(["api", "user", "-q", ".login"])
+                .output()
+                .expect("failed to run `git config user.name`")
+                .stdout;
+
+            let user =
+                String::from_utf8(get_username_cmd).expect("Failed to convert user name to utf-8");
+
+            user.trim().to_owned()
         }
 
         #[derive(Debug, Error)]
