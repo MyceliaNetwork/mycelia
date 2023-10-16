@@ -20,7 +20,7 @@ pub mod release {
     }
 
     fn try_release() -> Result<(), DynError> {
-        git::status();
+        git::status()?;
         // workspace::bump()?;
 
         // let tag = workspace::parse_cargo_pkg_version();
@@ -127,32 +127,16 @@ pub mod release {
                 .expect("`git status` failed")
                 .stdout;
 
-            let status = String::from_utf8(status_cmd).expect("Failed to convert status to utf-8");
-            println!(
-                "🪵 [release.rs:129]~ token ~ \x1b[0;32mstatus\x1b[0m = {}",
-                status
-            );
+            let output = String::from_utf8(status_cmd).expect("Failed to convert status to utf-8");
 
-            return match status.as_str() {
-                "meh" => {
-                    print!("0000000");
-                    Ok(())
-                }
-                error => {
-                    println!(
-                        "
-
-
-                                {error}
-
-
-                            "
-                    );
-                    Err(GitError::Status {
-                        error: error.to_string(),
-                    })
-                }
-            };
+            info!("{output:#?}");
+            if output.contains("nothing to commit, working tree clean") {
+                info!("meh");
+                return Ok(());
+            } else {
+                info!("mah");
+                return Err(GitError::Status { output });
+            }
         }
 
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
@@ -277,8 +261,12 @@ pub mod release {
 
         #[derive(Debug, Error)]
         pub enum GitError {
-            #[error("`git status` failed. Please commit your changes first. Error: {error}")]
-            Status { error: String },
+            #[error(
+                "`git status` failed. Please commit your changes first. Output:
+
+{output:#?}"
+            )]
+            Status { output: String },
             #[error("`git branch releases/{tag}` failed. Status code: {status}")]
             CreateBranch { tag: Version, status: i32 },
             #[error("`git switch releases/{tag}` failed. Status code: {status}")]
