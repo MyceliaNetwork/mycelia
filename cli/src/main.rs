@@ -4,9 +4,7 @@ use dialoguer::{theme::ColorfulTheme, Input};
 use log::{debug, error, info, trace, warn};
 use tokio::sync::oneshot::channel;
 
-use semver::Version;
 use std::{
-    cmp::Ordering,
     env,
     error::Error,
     fs,
@@ -84,14 +82,8 @@ enum NewProjectError {
 
 #[derive(Debug, Error)]
 enum ReleaseError {
-    #[error("Version parsing error. Cause: {cause:#?}")]
-    VersionParsingError { cause: semver::Error },
-    #[error("current version is {current} greater than argument `--version {input}`")]
-    CurrentVersionGreater { input: Version, current: Version },
-    #[error("current version {current} equal to `--version {input}`")]
-    CurrentVersionEqual { input: Version, current: Version },
-    #[error("`cargo xtask --version {version}` failed. Code: {status}")]
-    XtaskReleaseFailed { version: Version, status: i32 },
+    #[error("`cargo xtask release` failed. Code: {status}")]
+    XtaskReleaseFailed { status: i32 },
 }
 
 type DynError = Box<dyn Error>;
@@ -185,11 +177,7 @@ enum Commands {
         rpc_port: u16,
     },
     /// Release a new MyceliaVersion
-    Release {
-        /// The new Mycelia version
-        #[clap(long)]
-        version: String,
-    },
+    Release,
 }
 
 #[tokio::main]
@@ -239,8 +227,8 @@ async fn try_main() -> Result<(), DynError> {
         } => {
             deploy(ip, http_port, rpc_port, component).await;
         }
-        Commands::Release { version } => {
-            release(version).await;
+        Commands::Release => {
+            release();
         }
     }
 
@@ -713,70 +701,29 @@ async fn try_deploy(
     return Err(DeploymentError::ServerError);
 }
 
-async fn release(version_arg_val: &String) {
-    if let Err(error) = try_release(version_arg_val).await {
+fn release() {
+    if let Err(error) = try_release() {
         error!("{error}");
 
         std::process::exit(-1);
     }
 }
 
-async fn try_release(version_arg_val: &String) -> Result<(), ReleaseError> {
-    info!("Releasing new Mycelia version {version_arg_val:}");
+fn try_release() -> Result<(), ReleaseError> {
+    info!("Releasing new Mycelia version");
 
-    let version_current: &str = env!("CARGO_PKG_VERSION");
-    let version_current = Version::parse(version_current);
-    if let Err(cause) = version_current {
-        return Err(ReleaseError::VersionParsingError { cause });
-    }
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let release_cmd = std::process::Command::new(cargo)
+        .current_dir(project_root())
+        .args(&["xtask", "release"])
+        .status()
+        .expect("Unable to spawn release process");
 
-    let version_current = version_current.unwrap();
-    let version_arg_val = Version::parse(version_arg_val);
-
-    match version_arg_val {
-        Err(error) => {
-            return Err(ReleaseError::VersionParsingError { cause: error });
-        }
-        Ok(version_arg_val) => match version_arg_val.cmp(&version_current) {
-            Ordering::Greater => {
-                return Err(ReleaseError::CurrentVersionGreater {
-                    current: version_current,
-                    input: version_arg_val.clone(),
-                });
-            }
-            Ordering::Equal => {
-                return Err(ReleaseError::CurrentVersionEqual {
-                    current: version_current,
-                    input: version_arg_val.clone(),
-                });
-            }
-            Ordering::Less => {
-                let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-                let release_process = std::process::Command::new(cargo)
-                    .current_dir(project_root())
-                    .args(&[
-                        "xtask",
-                        "release",
-                        "--version",
-                        version_arg_val.to_string().as_str(),
-                    ])
-                    .status()
-                    .expect("Unable to spawn release process");
-
-                return match release_process.code() {
-                    Some(0) => Ok(()),
-                    Some(code) => Err(ReleaseError::XtaskReleaseFailed {
-                        version: version_arg_val.clone(),
-                        status: code,
-                    }),
-                    None => Err(ReleaseError::XtaskReleaseFailed {
-                        version: version_arg_val.clone(),
-                        status: -1,
-                    }),
-                };
-            }
-        },
-    }
+    return match release_cmd.code() {
+        Some(0) => Ok(()),
+        Some(code) => Err(ReleaseError::XtaskReleaseFailed { status: code }),
+        None => Err(ReleaseError::XtaskReleaseFailed { status: -1 }),
+    };
 }
 
 fn project_root() -> PathBuf {
