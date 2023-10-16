@@ -112,6 +112,7 @@ pub mod release {
         use crate::paths::paths;
         use crate::release::release::github;
         use crate::release::release::Branch;
+
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
@@ -253,6 +254,8 @@ pub mod release {
 
     pub mod github {
         use crate::paths::paths;
+        use crate::release::release::git;
+        use crate::release::release::Branch;
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
@@ -277,7 +280,10 @@ pub mod release {
 
             return match github_pr_create_cmd.code() {
                 Some(0) => Ok(()),
-                Some(status) => Err(GitHubError::CreatePullRequest { status, tag }),
+                Some(status) => {
+                    let _ = git::switch_branch(Branch::Back(&tag));
+                    Err(GitHubError::CreatePullRequest { status, tag })
+                }
                 None => Ok(()),
             };
         }
@@ -297,7 +303,10 @@ pub mod release {
 
             return match github_release_create_cmd.code() {
                 Some(0) => Ok(()),
-                Some(status) => Err(GitHubError::ReleaseCreate { tag, status }),
+                Some(status) => {
+                    let _ = git::switch_branch(Branch::Back(&tag));
+                    Err(GitHubError::ReleaseCreate { tag, status })
+                }
                 None => Ok(()),
             };
         }
