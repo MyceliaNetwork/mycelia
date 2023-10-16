@@ -1,9 +1,11 @@
 pub mod release {
+    use crate::paths::paths;
 
     use log::error;
     use semver::Version;
 
     type DynError = Box<dyn std::error::Error>;
+
     pub enum Branch<'a> {
         Back(&'a Version),
         Tag(&'a Version),
@@ -21,24 +23,24 @@ pub mod release {
 
     fn try_release() -> Result<(), DynError> {
         git::status()?;
-        // workspace::bump()?;
 
-        // let tag = workspace::parse_cargo_pkg_version();
+        workspace::bump()?;
 
-        // // let current_branch = git::branch_show_current();
-        // workspace::replace_all_in_file(
-        //     paths::file_rustwrap(),
-        //     "__VERSION__",
-        //     tag.to_string().as_str(),
-        // );
+        let tag = workspace::parse_cargo_pkg_version();
 
-        // git::create_branch(tag.clone())?;
-        // git::switch_branch(Branch::Tag(&tag))?;
-        // git::add_all(tag.clone())?;
-        // git::commit(tag.clone())?;
-        // git::push_branch(tag.clone())?;
-        // github::pr_create(tag.clone())?;
-        // github::release_create(tag.clone())?;
+        workspace::replace_all_in_file(
+            paths::file_rustwrap(),
+            "__VERSION__",
+            tag.to_string().as_str(),
+        );
+
+        git::create_branch(tag.clone())?;
+        git::switch_branch(Branch::Tag(&tag))?;
+        git::add_all(tag.clone())?;
+        git::commit(tag.clone())?;
+        git::push_branch(tag.clone())?;
+        github::pr_create(tag.clone())?;
+        github::release_create(tag.clone())?;
 
         Ok::<(), DynError>(())
     }
@@ -113,7 +115,6 @@ pub mod release {
         use crate::release::release::github;
         use crate::release::release::Branch;
 
-        use log::info;
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
@@ -129,14 +130,10 @@ pub mod release {
 
             let output = String::from_utf8(status_cmd).expect("Failed to convert status to utf-8");
 
-            info!("{output:#?}");
-            if output.contains("nothing to commit, working tree clean") {
-                info!("meh");
-                return Ok(());
-            } else {
-                info!("mah");
-                return Err(GitError::Status { output });
-            }
+            return match output.contains("nothing to commit, working tree clean") {
+                true => Ok(()),
+                false => Err(GitError::Status { output }),
+            };
         }
 
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
@@ -245,18 +242,6 @@ pub mod release {
                 }
                 None => Ok(()),
             };
-        }
-
-        pub fn branch_show_current() -> String {
-            let git_branch_show_current_cmd = Command::new("git")
-                .args(["branch", "--show-current"])
-                .output()
-                .expect("failed to run `git branch --show-current`")
-                .stdout;
-
-            let current_branch = String::from_utf8(git_branch_show_current_cmd)
-                .expect("Failed to convert branch name to utf-8");
-            current_branch.trim().to_owned()
         }
 
         #[derive(Debug, Error)]
