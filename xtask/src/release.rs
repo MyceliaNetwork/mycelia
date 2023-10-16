@@ -75,9 +75,10 @@ pub mod release {
                     // TODO: uncomment on merge
                     // "--allow-branch",
                     // "releases/*",
+                    "--no-git-commit",
                 ])
                 .status()
-                .expect("Failed to run `cargo workspaces version --allow-branch releases/*`");
+                .expect("`cargo workspaces version --allow-branch releases/*` failed");
 
             return match cargo_workspaces_version_cmd.code() {
                 Some(0) => Ok(()),
@@ -118,7 +119,7 @@ pub mod release {
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username();
-            let branch_name = format!("releases/{username}:{tag}");
+            let branch_name = format!("releases/{username}_{tag}");
             let create_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
                 .args(["branch", branch_name.as_str()])
@@ -137,7 +138,7 @@ pub mod release {
             let username = github::get_username();
             let branch_arg = match branch {
                 Branch::Back(_) => "-".to_string(),
-                Branch::Tag(tag) => format!("releases/{username}:{tag}").to_string(),
+                Branch::Tag(tag) => format!("releases/{username}_{tag}").to_string(),
             };
             let tag = match branch {
                 Branch::Back(tag) => tag,
@@ -199,7 +200,7 @@ pub mod release {
         pub fn push_branch(tag: Version) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username();
-            let branch_name = format!("releases/{username}:{tag}").to_string();
+            let branch_name = format!("releases/{username}_{tag}").to_string();
             let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
