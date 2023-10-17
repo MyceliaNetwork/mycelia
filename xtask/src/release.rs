@@ -37,9 +37,11 @@ pub mod release {
         git::switch_branch(Branch::Tag(&tag))?;
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
-        // git::push_branch(tag.clone())?;
+        git::push_branch(tag.clone())?;
         github::pr_create(tag.clone()).await?;
         // github::release_create(tag.clone())?;
+
+        git::siwtch(Branch::back(&tag));
 
         Ok::<(), DynError>(())
     }
@@ -75,11 +77,11 @@ pub mod release {
                     "version",
                     // TODO: uncomment on merge
                     // "--allow-branch",
-                    // "releases/*",
+                    // "release/*",
                     "--no-git-commit",
                 ])
                 .status()
-                .expect("`cargo workspaces version --allow-branch releases/*` failed");
+                .expect("`cargo workspaces version --no-git-commit` failed");
 
             return match cargo_workspaces_version_cmd.code() {
                 Some(0) => Ok(()),
@@ -137,7 +139,7 @@ pub mod release {
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username();
-            let branch_name = format!("releases/{username}_{tag}");
+            let branch_name = format!("rc/{username}_{tag}");
             let create_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
                 .args(["branch", branch_name.as_str()])
@@ -156,7 +158,7 @@ pub mod release {
             let username = github::get_username();
             let branch_arg = match branch {
                 Branch::Back(_) => "-".to_string(),
-                Branch::Tag(tag) => format!("releases/{username}_{tag}").to_string(),
+                Branch::Tag(tag) => format!("rc/{username}_{tag}").to_string(),
             };
             let tag = match branch {
                 Branch::Back(tag) => tag,
@@ -218,7 +220,7 @@ pub mod release {
         pub fn push_branch(tag: Version) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username();
-            let branch_name = format!("releases/{username}_{tag}").to_string();
+            let branch_name = format!("rc/{username}_{tag}").to_string();
             let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
@@ -250,15 +252,15 @@ pub mod release {
 {output:#?}"
             )]
             Status { output: String },
-            #[error("`git branch releases/{tag}` failed. Status code: {status}")]
+            #[error("`git branch rc/{tag}` failed. Status code: {status}")]
             CreateBranch { tag: Version, status: i32 },
-            #[error("`git switch releases/{tag}` failed. Status code: {status}")]
+            #[error("`git switch rc/{tag}` failed. Status code: {status}")]
             SwitchBranch { tag: Version, status: i32 },
             #[error("`git add .` failed for tag {tag}. Status code: {status}")]
             AddAll { tag: Version, status: i32 },
             #[error("`commit -m \"Release {tag:}\"` failed. Status code: {status:}")]
             Commit { tag: Version, status: i32 },
-            #[error("`git push origin -u releases/{tag}` failed. Status code: {status}")]
+            #[error("`git push origin -u rc/{tag}` failed. Status code: {status}")]
             PushBranch { tag: Version, status: i32 },
         }
     }
@@ -276,7 +278,7 @@ pub mod release {
             let octocrab = octocrab::instance();
             let username = get_username();
             let head = format!("rc/{username}_{tag}");
-            let base = format!("releases/{tag}");
+            let base = format!("release/{tag}");
             let title = format!("Release Candidate {tag}");
             let body = title.clone();
 
@@ -298,7 +300,7 @@ pub mod release {
 
             // let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
             // let username = get_username();
-            // let branch_name = format!("releases/{username}_{tag}");
+            // let branch_name = format!("rc/{username}_{tag}");
             // let github_pr_create_cmd = Command::new(github)
             //     .current_dir(paths::project_root())
             //     .args([
@@ -334,7 +336,7 @@ pub mod release {
         pub fn release_create(tag: Version) -> Result<(), GitHubError> {
             let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
             let username = get_username();
-            let branch_name = format!("releases/{username}_{tag}");
+            let branch_name = format!("rc/{username}_{tag}");
             let github_release_create_cmd = Command::new(github)
                 .current_dir(paths::project_root())
                 .args([
@@ -375,7 +377,7 @@ pub mod release {
 
         #[derive(Debug, Error)]
         pub enum GitHubError {
-            #[error("`gh pr create --fill --base releases/{branch_name} --assignee @me --title \"Release {tag}\"` failed. Status code: {status}" )]
+            #[error("`gh pr create --fill --base release/{branch_name} --assignee @me --title \"Release {tag}\"` failed. Status code: {status}" )]
             PullRequestCreate {
                 branch_name: String,
                 tag: Version,
