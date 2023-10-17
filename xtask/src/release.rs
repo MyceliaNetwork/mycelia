@@ -21,6 +21,7 @@ pub mod release {
     }
 
     async fn try_release() -> Result<(), DynError> {
+        github::env_token()?;
         git::status()?;
 
         workspace::bump()?;
@@ -41,7 +42,7 @@ pub mod release {
         github::pr_create(tag.clone()).await?;
         // github::release_create(tag.clone())?;
 
-        git::switch_branch(Branch::Back(&tag));
+        git::switch_branch(Branch::Back(&tag))?;
 
         Ok::<(), DynError>(())
     }
@@ -275,18 +276,23 @@ pub mod release {
     }
 
     pub mod github {
-        use crate::paths::paths;
         use crate::release::release::git;
         use crate::release::release::Branch;
         use octocrab::models::pulls::PullRequest;
         use octocrab::Error;
-        use octocrab::{self};
+        use octocrab::{self, Octocrab};
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
 
         pub async fn pr_create(tag: Version) -> Result<PullRequest, GitHubError> {
-            let octocrab = octocrab::instance();
+            let token = env_token()?;
+            let octocrab = Octocrab::builder().personal_token(token).build();
+            let octocrab = match octocrab {
+                Ok(octocrab) => octocrab,
+                Err(error) => return Err(GitHubError::Octocrab { error }),
+            };
+            // let octocrab = octocrab::instance();
             let username = get_username();
             let head = format!("rc/{username}_{tag}");
             let base = format!("release/{tag}");
@@ -302,7 +308,10 @@ pub mod release {
 
             return match pr {
                 Ok(pr) => Ok(pr),
-                Err(error) => Err(GitHubError::PullRequestCreate { error }),
+                Err(error) => {
+                    let _ = git::switch_branch(Branch::Back(&tag));
+                    Err(GitHubError::PullRequestCreate { error })
+                }
             };
 
             // return Err(GitHubError::PullRequestCreate {
@@ -346,33 +355,43 @@ pub mod release {
             // };
         }
 
-        pub fn release_create(tag: Version) -> Result<(), GitHubError> {
-            let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-            let username = get_username();
-            let branch_name = format!("rc/{username}_{tag}");
-            let github_release_create_cmd = Command::new(github)
-                .current_dir(paths::project_root())
-                .args([
-                    "release",
-                    "create",
-                    tag.to_string().as_str(),
-                    "--target",
-                    branch_name.as_str(),
-                    "--prerelease", // TODO: remove this flag when we are ready for a stable release
-                    "--generate-notes",
-                ])
-                .status()
-                .expect("Failed to create GitHub release");
-
-            return match github_release_create_cmd.code() {
-                Some(0) => Ok(()),
-                Some(status) => {
-                    let _ = git::switch_branch(Branch::Back(&tag));
-                    Err(GitHubError::ReleaseCreate { tag, status })
-                }
-                None => Ok(()),
+        pub fn env_token() -> Result<String, GitHubError> {
+            // TODO: also test if user has the rights.
+            // TODO: Next step would be to hide the `release` feature for users that do not have the rights
+            let token = std::env::var("GITHUB_TOKEN");
+            return match token {
+                Ok(token) => Ok(token),
+                _ => Err(GitHubError::EnvToken),
             };
         }
+
+        // pub fn release_create(tag: Version) -> Result<(), GitHubError> {
+        //     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+        //     let username = get_username();
+        //     let branch_name = format!("rc/{username}_{tag}");
+        //     let github_release_create_cmd = Command::new(github)
+        //         .current_dir(paths::project_root())
+        //         .args([
+        //             "release",
+        //             "create",
+        //             tag.to_string().as_str(),
+        //             "--target",
+        //             branch_name.as_str(),
+        //             "--prerelease", // TODO: remove this flag when we are ready for a stable release
+        //             "--generate-notes",
+        //         ])
+        //         .status()
+        //         .expect("Failed to create GitHub release");
+
+        //     return match github_release_create_cmd.code() {
+        //         Some(0) => Ok(()),
+        //         Some(status) => {
+        //             let _ = git::switch_branch(Branch::Back(&tag));
+        //             Err(GitHubError::ReleaseCreate { tag, status })
+        //         }
+        //         None => Ok(()),
+        //     };
+        // }
 
         pub fn get_username() -> String {
             let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
@@ -390,13 +409,17 @@ pub mod release {
 
         #[derive(Debug, Error)]
         pub enum GitHubError {
+            #[error("GITHUB_TOKEN environment variable not found. Necessary to create a release")]
+            EnvToken,
+            #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
+            Octocrab { error: Error },
             #[error("octocrab.pulls().create() failed. Error: {error}")]
             PullRequestCreate { error: Error },
             // TODO: update final command
-            #[error(
-                "`gh release create --prerelease --generate-notes` failed. Status code: {status}"
-            )]
-            ReleaseCreate { tag: Version, status: i32 },
+            // #[error(
+            //     "`gh release create --prerelease --generate-notes` failed. Status code: {status}"
+            // )]
+            // ReleaseCreate { tag: Version, status: i32 },
         }
     }
 }
