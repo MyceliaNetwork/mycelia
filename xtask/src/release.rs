@@ -319,7 +319,7 @@ pub mod release {
                 .args([
                     "release",
                     "create",
-                    tag.as_str(),
+                    tag.to_string().as_str(),
                     "--target",
                     branch_name.as_str(),
                     "--prerelease", // TODO: remove this flag when we are ready for a stable release
