@@ -41,7 +41,7 @@ pub mod release {
         github::pr_create(tag.clone()).await?;
         // github::release_create(tag.clone())?;
 
-        git::siwtch(Branch::back(&tag));
+        git::switch(Branch::Back(&tag));
 
         Ok::<(), DynError>(())
     }
