@@ -49,6 +49,7 @@ pub mod release {
     mod workspace {
         use crate::paths::paths;
         use cargo_metadata::MetadataCommand;
+        use log::info;
         use semver::Version;
         use std::{env, fs, fs::OpenOptions, io::Write, path::PathBuf, process::Command};
         use thiserror::Error;
@@ -69,6 +70,7 @@ pub mod release {
         }
 
         pub fn bump() -> Result<(), WorkspaceError> {
+            let pre_bump_tag = parse_cargo_pkg_version();
             let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
             let cargo_workspaces_version_cmd = Command::new(cargo)
                 .current_dir(paths::project_root())
@@ -82,6 +84,12 @@ pub mod release {
                 ])
                 .status()
                 .expect("`cargo workspaces version --no-git-commit` failed");
+
+            let post_bump_tag = parse_cargo_pkg_version();
+
+            if pre_bump_tag == post_bump_tag {
+                return Err(WorkspaceError::DidNotUpdateVersion { tag: post_bump_tag });
+            }
 
             return match cargo_workspaces_version_cmd.code() {
                 Some(0) => Ok(()),
@@ -106,6 +114,8 @@ pub mod release {
 
         #[derive(Debug, Error)]
         pub enum WorkspaceError {
+            #[error("Chosen tag is same as current ({tag}). You might have not confirmed.")]
+            DidNotUpdateVersion { tag: Version },
             #[error("cargo-workspace failed. Status code: {status}")]
             CargoWorkspace { status: i32 },
         }
