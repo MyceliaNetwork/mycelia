@@ -279,6 +279,7 @@ pub mod release {
         use crate::paths::paths;
         use crate::release::release::git;
         use crate::release::release::Branch;
+        use octocrab::Error;
         use octocrab::{self};
         use semver::Version;
         use std::{env, process::Command};
@@ -292,21 +293,23 @@ pub mod release {
             let title = format!("Release Candidate {tag}");
             let body = title.clone();
 
-            octocrab
+            let pr = octocrab
                 .pulls("MyceliaNetwork", "mycelia")
                 .create(title.clone(), head.clone(), base)
                 .body(body)
                 .send()
                 .await;
 
-            if 1 == 1 {
-                return Ok(());
-            }
-            return Err(GitHubError::PullRequestCreate {
-                branch_name: head,
-                status: -1,
-                tag,
-            });
+            return match pr {
+                Ok => Ok(()),
+                Err(error) => Err(GitHubError::PullRequestCreate { error }),
+            };
+
+            // return Err(GitHubError::PullRequestCreate {
+            //     branch_name: head,
+            //     status: -1,
+            //     tag,
+            // });
 
             // let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
             // let username = get_username();
@@ -387,12 +390,8 @@ pub mod release {
 
         #[derive(Debug, Error)]
         pub enum GitHubError {
-            #[error("`gh pr create --fill --base release/{branch_name} --assignee @me --title \"Release {tag}\"` failed. Status code: {status}" )]
-            PullRequestCreate {
-                branch_name: String,
-                tag: Version,
-                status: i32,
-            },
+            #[error("octocrab.pulls().create() failed. Error: {error}")]
+            PullRequestCreate { error: Error },
             // TODO: update final command
             #[error(
                 "`gh release create --prerelease --generate-notes` failed. Status code: {status}"
