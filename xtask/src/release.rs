@@ -49,7 +49,6 @@ pub mod release {
     mod workspace {
         use crate::paths::paths;
         use cargo_metadata::MetadataCommand;
-        use log::info;
         use semver::Version;
         use std::{env, fs, fs::OpenOptions, io::Write, path::PathBuf, process::Command};
         use thiserror::Error;
@@ -279,13 +278,14 @@ pub mod release {
         use crate::paths::paths;
         use crate::release::release::git;
         use crate::release::release::Branch;
+        use octocrab::models::pulls::PullRequest;
         use octocrab::Error;
         use octocrab::{self};
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
 
-        pub async fn pr_create(tag: Version) -> Result<(), GitHubError> {
+        pub async fn pr_create(tag: Version) -> Result<PullRequest, GitHubError> {
             let octocrab = octocrab::instance();
             let username = get_username();
             let head = format!("rc/{username}_{tag}");
@@ -301,7 +301,7 @@ pub mod release {
                 .await;
 
             return match pr {
-                Ok => Ok(()),
+                Ok(pr) => Ok(pr),
                 Err(error) => Err(GitHubError::PullRequestCreate { error }),
             };
 
