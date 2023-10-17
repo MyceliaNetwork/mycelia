@@ -32,7 +32,7 @@ async fn try_main() -> Result<(), DynError> {
 
     match task.as_deref() {
         Some("build") => build()?,
-        Some("release") => release()?,
+        Some("release") => release().await?,
         Some("publish") => publish().await?,
         _ => print_help(),
     }
