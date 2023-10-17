@@ -1,6 +1,5 @@
 pub mod release {
     use crate::paths::paths;
-
     use log::error;
     use semver::Version;
 
@@ -11,8 +10,8 @@ pub mod release {
         Tag(&'a Version),
     }
 
-    pub fn release() -> Result<(), DynError> {
-        if let Err(error) = try_release() {
+    pub async fn release() -> Result<(), DynError> {
+        if let Err(error) = try_release().await {
             error!("{error:#}");
 
             std::process::exit(-1);
@@ -21,7 +20,7 @@ pub mod release {
         Ok(())
     }
 
-    fn try_release() -> Result<(), DynError> {
+    async fn try_release() -> Result<(), DynError> {
         git::status()?;
 
         workspace::bump()?;
@@ -38,9 +37,9 @@ pub mod release {
         git::switch_branch(Branch::Tag(&tag))?;
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
-        git::push_branch(tag.clone())?;
-        // github::pr_create(tag.clone())?;
-        github::release_create(tag.clone())?;
+        // git::push_branch(tag.clone())?;
+        github::pr_create(tag.clone()).await?;
+        // github::release_create(tag.clone())?;
 
         Ok::<(), DynError>(())
     }
@@ -114,7 +113,6 @@ pub mod release {
         use crate::paths::paths;
         use crate::release::release::github;
         use crate::release::release::Branch;
-
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
@@ -269,45 +267,68 @@ pub mod release {
         use crate::paths::paths;
         use crate::release::release::git;
         use crate::release::release::Branch;
+        use octocrab::{self};
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
 
-        pub fn pr_create(tag: Version) -> Result<(), GitHubError> {
-            let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+        pub async fn pr_create(tag: Version) -> Result<(), GitHubError> {
+            let octocrab = octocrab::instance();
             let username = get_username();
-            let branch_name = format!("releases/{username}_{tag}");
-            let github_pr_create_cmd = Command::new(github)
-                .current_dir(paths::project_root())
-                .args([
-                    "pr",
-                    "create",
-                    "--assignee",
-                    "@me",
-                    "--fill",
-                    // "--base",
-                    // branch_name.as_str(),
+            let head = format!("rc/{username}_{tag}");
+            let base = format!("releases/{tag}");
+            let title = format!("Release Candidate {tag}");
+            let body = title.clone();
 
-                    // "--title",
-                    // format!("Release {}", tag.to_string()).as_str(),
-                    // "--body",
-                    // format!("Release {}", tag.to_string()).as_str(),
-                ])
-                .status()
-                .expect("Failed to create GitHub pull request");
+            octocrab
+                .pulls("MyceliaNetwork", "mycelia")
+                .create(title.clone(), head.clone(), base)
+                .body(body)
+                .send()
+                .await;
 
-            return match github_pr_create_cmd.code() {
-                Some(0) => Ok(()),
-                Some(status) => {
-                    let _ = git::switch_branch(Branch::Back(&tag));
-                    Err(GitHubError::CreatePullRequest {
-                        branch_name,
-                        status,
-                        tag,
-                    })
-                }
-                None => Ok(()),
-            };
+            if 1 == 1 {
+                return Ok(());
+            }
+            return Err(GitHubError::PullRequestCreate {
+                branch_name: head,
+                status: -1,
+                tag,
+            });
+
+            // let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
+            // let username = get_username();
+            // let branch_name = format!("releases/{username}_{tag}");
+            // let github_pr_create_cmd = Command::new(github)
+            //     .current_dir(paths::project_root())
+            //     .args([
+            //         "pr",
+            //         "create",
+            //         "--assignee",
+            //         "@me",
+            //         "--fill",
+            //         // "--base",
+            //         // branch_name.as_str(),
+            //         // "--title",
+            //         // format!("Release {}", tag.to_string()).as_str(),
+            //         // "--body",
+            //         // format!("Release {}", tag.to_string()).as_str(),
+            //     ])
+            //     .status()
+            //     .expect("Failed to create GitHub pull request");
+
+            // return match github_pr_create_cmd.code() {
+            //     Some(0) => Ok(()),
+            //     Some(status) => {
+            //         let _ = git::switch_branch(Branch::Back(&tag));
+            //         Err(GitHubError::PullRequestCreate {
+            //             branch_name,
+            //             status,
+            //             tag,
+            //         })
+            //     }
+            //     None => Ok(()),
+            // };
         }
 
         pub fn release_create(tag: Version) -> Result<(), GitHubError> {
@@ -355,7 +376,7 @@ pub mod release {
         #[derive(Debug, Error)]
         pub enum GitHubError {
             #[error("`gh pr create --fill --base releases/{branch_name} --assignee @me --title \"Release {tag}\"` failed. Status code: {status}" )]
-            CreatePullRequest {
+            PullRequestCreate {
                 branch_name: String,
                 tag: Version,
                 status: i32,
