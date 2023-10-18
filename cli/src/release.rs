@@ -21,6 +21,11 @@ pub mod release {
         Ok(())
     }
 
+    pub enum BranchNamespace {
+        Rc,
+        Release,
+    }
+
     async fn try_release() -> Result<(), DynError> {
         github::env_token()?;
         git::status()?;
@@ -35,7 +40,7 @@ pub mod release {
             tag.to_string().as_str(),
         );
 
-        git::create_branch(tag.clone())?;
+        git::create_branch(BranchNamespace::Rc, tag.clone())?;
         git::switch_branch(Branch::Tag(&tag))?;
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
@@ -126,6 +131,7 @@ pub mod release {
         use crate::paths::paths;
         use crate::release::release::github;
         use crate::release::release::Branch;
+        use crate::release::release::BranchNamespace;
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
@@ -147,10 +153,14 @@ pub mod release {
             };
         }
 
-        pub fn create_branch(tag: Version) -> Result<(), GitError> {
+        pub fn create_branch(namespace: BranchNamespace, tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username().expect("Could not retrieve GitHub username");
-            let branch_name = format!("rc/{username}_{tag}");
+            let namespace = match namespace {
+                BranchNamespace::Rc => "rc",
+                BranchNamespace::Release => "release",
+            };
+            let branch_name = format!("{namespace}/{username}_{tag}");
             let create_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
                 .args(["branch", branch_name.as_str()])
@@ -286,6 +296,9 @@ pub mod release {
         use std::{env, process::Command};
         use thiserror::Error;
 
+        use super::git::create_branch;
+        use super::BranchNamespace;
+
         pub async fn pr_create(tag: Version) -> Result<PullRequest, GitHubError> {
             let token = env_token()?;
             let octocrab = Octocrab::builder().personal_token(token).build();
@@ -293,6 +306,8 @@ pub mod release {
                 Ok(octocrab) => octocrab,
                 Err(error) => return Err(GitHubError::Octocrab { error }),
             };
+            create_branch(BranchNamespace::Release, tag.clone())
+                .expect("Could not create branch on origin: releases/{tag}");
             // let octocrab = octocrab::instance();
             let username = get_username().expect("Could not retrieve GitHub username");
             let head = format!("rc/{username}_{tag}");
