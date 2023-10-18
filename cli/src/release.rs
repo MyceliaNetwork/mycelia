@@ -149,7 +149,7 @@ pub mod release {
 
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = github::get_username();
+            let username = github::get_username().expect("Could not retrieve GitHub username");
             let branch_name = format!("rc/{username}_{tag}");
             let create_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
@@ -166,7 +166,7 @@ pub mod release {
 
         pub fn switch_branch(branch: Branch) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = github::get_username();
+            let username = github::get_username().expect("Could not retrieve GitHub username");
             let branch_arg = match branch {
                 Branch::Back(_) => "-".to_string(),
                 Branch::Tag(tag) => format!("rc/{username}_{tag}").to_string(),
@@ -230,7 +230,7 @@ pub mod release {
 
         pub fn push_branch(tag: Version) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = github::get_username();
+            let username = github::get_username().expect("Could not retrieve GitHub username");
             let branch_name = format!("rc/{username}_{tag}").to_string();
             let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
@@ -294,7 +294,7 @@ pub mod release {
                 Err(error) => return Err(GitHubError::Octocrab { error }),
             };
             // let octocrab = octocrab::instance();
-            let username = get_username();
+            let username = get_username().expect("Could not retrieve GitHub username");
             let head = format!("rc/{username}_{tag}");
             let base = format!("release/{tag}");
             let title = format!("Release Candidate {tag}");
@@ -322,7 +322,7 @@ pub mod release {
             // });
 
             // let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-            // let username = get_username();
+            // let username = get_username().expect("Could not retrieve GitHub username");
             // let branch_name = format!("rc/{username}_{tag}");
             // let github_pr_create_cmd = Command::new(github)
             //     .current_dir(paths::project_root())
@@ -362,13 +362,13 @@ pub mod release {
             let token = std::env::var("GITHUB_TOKEN");
             return match token {
                 Ok(token) => Ok(token),
-                _ => Err(GitHubError::EnvToken),
+                _ => Err(GitHubError::EnvTokenNotFound),
             };
         }
 
         // pub fn release_create(tag: Version) -> Result<(), GitHubError> {
         //     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-        //     let username = get_username();
+        //     let username = get_username().expect("Could not retrieve GitHub username");
         //     let branch_name = format!("rc/{username}_{tag}");
         //     let github_release_create_cmd = Command::new(github)
         //         .current_dir(paths::project_root())
@@ -394,7 +394,7 @@ pub mod release {
         //     };
         // }
 
-        pub fn get_username() -> String {
+        pub fn get_username() -> Result<String, GitHubError> {
             let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
             let get_username_cmd = Command::new(github)
                 .args(["api", "user", "-q", ".login"])
@@ -402,16 +402,22 @@ pub mod release {
                 .expect("failed to run `git config user.name`")
                 .stdout;
 
-            let user =
+            let username =
                 String::from_utf8(get_username_cmd).expect("Failed to convert user name to utf-8");
+            let username = username.trim().to_owned();
 
-            user.trim().to_owned()
+            return match username.contains("Bad credentials") {
+                true => Err(GitHubError::EnvTokenInvalid),
+                false => Ok(username),
+            };
         }
 
         #[derive(Debug, Error)]
         pub enum GitHubError {
             #[error("GITHUB_TOKEN environment variable not found. IMPORTANT: add it to the .gitignored /.env file in the project root to make sure your secrets do not leak.")]
-            EnvToken,
+            EnvTokenNotFound,
+            #[error("Bad GitHub credentials. Please check if the GITHUB_TOKEN in your /.env file is correctly configured and has the required permissions.")]
+            EnvTokenInvalid,
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             Octocrab { error: Error },
             #[error("octocrab.pulls().create() failed. Error: {error}")]
