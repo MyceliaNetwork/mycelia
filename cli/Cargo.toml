@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/MyceliaNetwork/mycelia"
 authors = ["Daniel Terwiel <dani+mycelia@departure.dev>"]
 
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -19,20 +20,21 @@ prost = "0.12.0"
 thiserror = "1.0.48"
 tokio = { version = "1.32.0", features = ["full"] }
 tonic = { version = "0.10.0" }
-
-development_server = { path = "../development_server" }
-mycelia_guest_function = { path = "../guests/function" }
-mycelia_http = { path = "../guest_crates/mycelia_http" }
-protos = { path = "../protos" }
-resource_providers = { path = "../resource_providers" }
-function_service = { path = "../services/function" }
-# wasm_components = { path = "../wasm_components" }
 semver = { workspace = true }
 rustwrap = "1.0.5"
 dialoguer = "0.11.0"
 octocrab = "0.31.2"
 cargo_metadata = "0.18.1"
 chrono = "0.4.31"
+
+development_server = { path = "../development_server" }
+mycelia_guest_function = { path = "../guests/function" }
+mycelia_http = { path = "../guest_crates/mycelia_http" }
+protos = { path = "../protos" }
+resource_providers = { path = "../resource_providers" }
+dotenvy = "0.15.7"
+# function_service = { path = "../services/function" }
+# wasm_components = { path = "../wasm_components" }
 
 [build-dependencies]
 tonic-build = "0.10.0"

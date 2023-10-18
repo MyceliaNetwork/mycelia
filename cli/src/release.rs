@@ -410,7 +410,7 @@ pub mod release {
 
         #[derive(Debug, Error)]
         pub enum GitHubError {
-            #[error("GITHUB_TOKEN environment variable not found. Necessary to create a release")]
+            #[error("GITHUB_TOKEN environment variable not found. IMPORTANT: add it to the .gitignored /.env file in the project root to make sure your secrets do not leak.")]
             EnvToken,
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             Octocrab { error: Error },

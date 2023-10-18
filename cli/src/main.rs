@@ -1,4 +1,6 @@
 #[allow(clippy::all)]
+use dotenvy;
+
 use clap::{Parser, Subcommand};
 use log::error;
 
@@ -112,6 +114,8 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<(), DynError> {
+    dotenvy::dotenv()?;
+
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info")
     }

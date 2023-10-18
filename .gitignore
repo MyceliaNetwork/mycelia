@@ -35,3 +35,6 @@ deployable/
 
 # Rustwrap
 dist/
+
+# dotenv files
+.env
