@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 pub mod publish {
     use crate::paths::paths;
     use chrono::{DateTime, Utc};

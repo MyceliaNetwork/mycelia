@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 pub mod release {
     use crate::paths::paths;
     use log::error;
