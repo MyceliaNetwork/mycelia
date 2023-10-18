@@ -8,9 +8,6 @@ pub mod build {
     type DynError = Box<dyn std::error::Error>;
 
     pub fn build() -> Result<(), DynError> {
-        let guests = guests();
-        info!("guests: {guests:#?}");
-
         info!("Building Mycelia project");
         fs::create_dir_all(&paths::dir_target())?;
         fs::create_dir_all(&paths::dir_components())?;
