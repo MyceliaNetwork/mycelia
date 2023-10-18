@@ -44,7 +44,7 @@ pub mod release {
         git::switch_branch(Branch::Tag(&tag))?;
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
-        git::push_branch(tag.clone())?;
+        git::push_branch(BranchNamespace::Rc, tag.clone())?;
         github::pr_create(tag.clone()).await?;
         // github::release_create(tag.clone())?;
 
@@ -132,6 +132,7 @@ pub mod release {
         use crate::release::release::github;
         use crate::release::release::Branch;
         use crate::release::release::BranchNamespace;
+        use log::info;
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
@@ -156,11 +157,12 @@ pub mod release {
         pub fn create_branch(namespace: BranchNamespace, tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username().expect("Could not retrieve GitHub username");
-            let namespace = match namespace {
-                BranchNamespace::Rc => "rc",
-                BranchNamespace::Release => "release",
+            // TODO: BranchNameSpace.to_string()
+            let branch_name = match namespace {
+                BranchNamespace::Rc => format!("rc/{username}_{tag}"),
+                BranchNamespace::Release => format!("release/{tag}"),
             };
-            let branch_name = format!("{namespace}/{username}_{tag}");
+            info!("Creating branch {branch_name}");
             let create_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
                 .args(["branch", branch_name.as_str()])
@@ -238,10 +240,13 @@ pub mod release {
             };
         }
 
-        pub fn push_branch(tag: Version) -> Result<(), GitError> {
+        pub fn push_branch(namespace: BranchNamespace, tag: Version) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username().expect("Could not retrieve GitHub username");
-            let branch_name = format!("rc/{username}_{tag}").to_string();
+            let branch_name = match namespace {
+                BranchNamespace::Rc => format!("rc/{username}_{tag}"),
+                BranchNamespace::Release => format!("release/{tag}"),
+            };
             let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
@@ -297,6 +302,7 @@ pub mod release {
         use thiserror::Error;
 
         use super::git::create_branch;
+        use super::git::push_branch;
         use super::BranchNamespace;
 
         pub async fn pr_create(tag: Version) -> Result<PullRequest, GitHubError> {
@@ -307,8 +313,9 @@ pub mod release {
                 Err(error) => return Err(GitHubError::Octocrab { error }),
             };
             create_branch(BranchNamespace::Release, tag.clone())
-                .expect("Could not create branch on origin: releases/{tag}");
-            // let octocrab = octocrab::instance();
+                .expect("Could not create branch on origin: releass/{tag}");
+            push_branch(BranchNamespace::Release, tag.clone())
+                .expect("Could not push branch to origin: releases/{tag}");
             let username = get_username().expect("Could not retrieve GitHub username");
             let head = format!("rc/{username}_{tag}");
             let base = format!("release/{tag}");
