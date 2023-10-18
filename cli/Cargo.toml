@@ -27,10 +27,12 @@ protos = { path = "../protos" }
 resource_providers = { path = "../resource_providers" }
 function_service = { path = "../services/function" }
 # wasm_components = { path = "../wasm_components" }
-xtask = { path = "../xtask" }
-rustwrap = "1.0.5"
 semver = { workspace = true }
+rustwrap = "1.0.5"
 dialoguer = "0.11.0"
+octocrab = "0.31.2"
+cargo_metadata = "0.18.1"
+chrono = "0.4.31"
 
 [build-dependencies]
 tonic-build = "0.10.0"

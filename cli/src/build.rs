@@ -1,18 +1,24 @@
+#[allow(clippy::all)]
 pub mod build {
-
     use crate::paths::paths;
-
+    use log::info;
     use std::{cmp::Ordering, collections::HashMap, env, fs, path::PathBuf, process::Command};
     use thiserror::Error;
+
     type DynError = Box<dyn std::error::Error>;
 
     pub fn build() -> Result<(), DynError> {
+        let guests = guests();
+        info!("guests: {guests:#?}");
+
+        info!("Building Mycelia project");
         fs::create_dir_all(&paths::dir_target())?;
         fs::create_dir_all(&paths::dir_components())?;
 
         for guest in guests() {
             wasm(&guest)?;
             component(&guest)?;
+            // TODO: should this be included int he loop?
             workspace()?;
         }
 
@@ -93,7 +99,7 @@ pub mod build {
         };
     }
 
-    // TODO: is this really necessary? Can it be merged with build::workspace?
+    // // TODO: is this really necessary? Can it be merged with build::workspace?
     // fn workspace_release() -> Result<(), ReleaseError> {
     //     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     //     let cargo_build = Command::new(cargo)

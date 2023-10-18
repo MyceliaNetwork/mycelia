@@ -8,7 +8,7 @@ Open Source Application Stack &amp; PaaS
 cargo run build
 ```
 
-**IMPORTANT**: `cargo build` will fail because we have to use [cargo-xtask](https://github.com/matklad/cargo-xtask/) to build the ./components/ folder before building the project. Reason: Cargo's build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
+**IMPORTANT**: `cargo build` will fail because we have to build the ./components/ folder before building the project. Reason: Cargo's build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
 
 ## CLI
 

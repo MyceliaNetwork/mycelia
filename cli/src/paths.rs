@@ -1,3 +1,4 @@
+#[allow(clippy::all)]
 pub mod paths {
     use std::{
         env,
@@ -30,5 +31,9 @@ pub mod paths {
 
     pub fn file_rustwrap() -> PathBuf {
         project_root().join("rustwrap.yaml")
+    }
+
+    pub fn deployable_target() -> PathBuf {
+        project_root().join("deployable")
     }
 }
