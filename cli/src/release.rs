@@ -163,7 +163,10 @@ pub mod release {
 
             return match create_branch_cmd.code() {
                 Some(0) => Ok(()),
-                Some(status) => Err(GitError::CreateBranch { tag, status }),
+                Some(status) => Err(GitError::CreateBranch {
+                    branch_name,
+                    status,
+                }),
                 None => Ok(()),
             };
         }
@@ -171,7 +174,7 @@ pub mod release {
         pub fn switch_branch(branch: Branch) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username().expect("Could not retrieve GitHub username");
-            let branch_arg = match branch {
+            let branch_name = match branch {
                 Branch::Back(_) => "-".to_string(),
                 Branch::Tag(tag) => format!("rc/{username}_{tag}").to_string(),
             };
@@ -181,9 +184,9 @@ pub mod release {
             };
             let git_switch_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
-                .args(["switch", branch_arg.as_str()])
+                .args(["switch", branch_name.as_str()])
                 .status()
-                .expect(format!("Failed to run `git switch {branch_arg}").as_str());
+                .expect(format!("Failed to run `git switch {branch_name}").as_str());
 
             return match git_switch_branch_cmd.code() {
                 Some(0) => Ok(()),
@@ -193,7 +196,7 @@ pub mod release {
                         switch_branch(Branch::Back(tag))?;
                     }
                     return Err(GitError::SwitchBranch {
-                        tag: tag.clone(),
+                        branch_name,
                         status: branch_already_exists,
                     });
                 }
@@ -267,10 +270,10 @@ pub mod release {
 {output:#?}"
             )]
             Status { output: String },
-            #[error("`git branch rc/{tag}` failed. Status code: {status}")]
-            CreateBranch { tag: Version, status: i32 },
-            #[error("`git switch rc/{tag}` failed. Status code: {status}")]
-            SwitchBranch { tag: Version, status: i32 },
+            #[error("`git branch {branch_name}` failed. Status code: {status}")]
+            CreateBranch { branch_name: String, status: i32 },
+            #[error("`git switch {branch_name}` failed. Status code: {status}")]
+            SwitchBranch { branch_name: String, status: i32 },
             #[error("`git add .` failed for tag {tag}. Status code: {status}")]
             AddAll { tag: Version, status: i32 },
             #[error("`commit -m \"Release {tag:}\"` failed. Status code: {status:}")]
