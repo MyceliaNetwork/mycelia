@@ -320,7 +320,7 @@ pub mod release {
                 Ok(commit) => Ok(commit),
                 Err(error) => {
                     let _ = git::switch_branch(Branch::Back(&tag_post_bump));
-                    Err(GitHubError::MergeCommit { error })
+                    Err(GitHubError::MergeCommit { base, head, error })
                 }
             };
         }
@@ -390,8 +390,14 @@ pub mod release {
             EnvTokenInvalid,
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             OctocrabTokenBuild { error: Error },
-            #[error("`octocrab.repos().merge()` failed. Error: {error}")]
-            MergeCommit { error: Error },
+            #[error(
+                "`octocrab.repos().merge()` failed. Base -> HEAD: {base} -> {head}  Error: {error}"
+            )]
+            MergeCommit {
+                base: String,
+                head: String,
+                error: Error,
+            },
             #[error("`octocrab.pulls().create()` failed. Error: {error}")]
             CreatePullRequest { error: Error },
         }
