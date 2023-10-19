@@ -28,23 +28,24 @@ pub mod release {
         git::status()?;
         workspace::bump()?;
 
-        let tag_post_bump = workspace::parse_cargo_pkg_version();
+        let tag = workspace::parse_cargo_pkg_version();
 
         workspace::replace_all_in_file(
             paths::file_rustwrap(),
             "__VERSION__",
-            tag_post_bump.to_string().as_str(),
+            tag.to_string().as_str(),
         );
 
-        git::create_branch(tag_post_bump.clone())?;
-        git::switch_branch(Branch::Tag(&tag_post_bump))?;
-        git::add_all(tag_post_bump.clone())?;
-        git::commit(tag_post_bump.clone())?;
-        git::push_branch(tag_post_bump.clone())?;
-        github::pr_create(tag_pre_bump, tag_post_bump.clone()).await?;
+        git::create_branch(tag.clone())?;
+        git::switch_branch(Branch::Tag(&tag))?;
+        git::add_all(tag.clone())?;
+        git::commit(tag.clone())?;
+        git::push_branch(tag.clone())?;
+        github::create_branch(tag_pre_bump, tag.clone()).await?;
+        github::create_pr(tag.clone()).await?;
         // github::release_create(tag.clone())?;
 
-        git::switch_branch(Branch::Back(&tag_post_bump))?;
+        git::switch_branch(Branch::Back(&tag))?;
 
         Ok::<(), DynError>(())
     }
@@ -282,27 +283,59 @@ pub mod release {
     pub mod github {
         use crate::release::release::git;
         use crate::release::release::Branch;
-        use octocrab::models::pulls::PullRequest;
-        use octocrab::Error;
-        use octocrab::{self, Octocrab};
+        use octocrab::{
+            self,
+            models::{pulls::PullRequest, repos::MergeCommit},
+            Error, Octocrab,
+        };
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
 
-        pub async fn pr_create(
+        pub async fn create_branch(
             tag_pre_bump: Version,
             tag_post_bump: Version,
-        ) -> Result<PullRequest, GitHubError> {
+        ) -> Result<MergeCommit, GitHubError> {
             let token = env_token()?;
             let octocrab = Octocrab::builder().personal_token(token).build();
             let octocrab = match octocrab {
                 Ok(octocrab) => octocrab,
-                Err(error) => return Err(GitHubError::Octocrab { error }),
+                Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
             };
             let username = get_username().expect("Could not retrieve GitHub username");
             let base = format!("release/{tag_pre_bump}");
-            let head = format!("rc/{username}_{tag_post_bump}");
-            let title = format!("Release Candidate {tag_post_bump}");
+            let head = format!("release/{tag_post_bump}");
+            let rc = format!("rc/{username}_{tag_post_bump}");
+            let commit_msg =
+                format!("Merge {base} into {head} to allow {rc} to be merged into for release");
+
+            let merge_commit = octocrab
+                .repos("MyceliaNetwork", "mycelia")
+                .merge(base, head)
+                .commit_message(commit_msg)
+                .send()
+                .await;
+
+            return match merge_commit {
+                Ok(commit) => Ok(commit),
+                Err(error) => {
+                    let _ = git::switch_branch(Branch::Back(&tag_post_bump));
+                    Err(GitHubError::MergeCommit { error })
+                }
+            };
+        }
+
+        pub async fn create_pr(tag: Version) -> Result<PullRequest, GitHubError> {
+            let token = env_token()?;
+            let octocrab = Octocrab::builder().personal_token(token).build();
+            let octocrab = match octocrab {
+                Ok(octocrab) => octocrab,
+                Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
+            };
+            let username = get_username().expect("Could not retrieve GitHub username");
+            let base = format!("release/{tag}");
+            let head = format!("rc/{username}_{tag}");
+            let title = format!("Release Candidate {tag}");
             let body = title.clone();
 
             let pr = octocrab
@@ -315,50 +348,10 @@ pub mod release {
             return match pr {
                 Ok(pr) => Ok(pr),
                 Err(error) => {
-                    let _ = git::switch_branch(Branch::Back(&tag_post_bump));
-                    Err(GitHubError::PullRequestCreate { error })
+                    let _ = git::switch_branch(Branch::Back(&tag));
+                    Err(GitHubError::CreatePullRequest { error })
                 }
             };
-
-            // return Err(GitHubError::PullRequestCreate {
-            //     branch_name: head,
-            //     status: -1,
-            //     tag,
-            // });
-
-            // let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-            // let username = get_username().expect("Could not retrieve GitHub username");
-            // let branch_name = format!("rc/{username}_{tag}");
-            // let github_pr_create_cmd = Command::new(github)
-            //     .current_dir(paths::project_root())
-            //     .args([
-            //         "pr",
-            //         "create",
-            //         "--assignee",
-            //         "@me",
-            //         "--fill",
-            //         // "--base",
-            //         // branch_name.as_str(),
-            //         // "--title",
-            //         // format!("Release {}", tag.to_string()).as_str(),
-            //         // "--body",
-            //         // format!("Release {}", tag.to_string()).as_str(),
-            //     ])
-            //     .status()
-            //     .expect("Failed to create GitHub pull request");
-
-            // return match github_pr_create_cmd.code() {
-            //     Some(0) => Ok(()),
-            //     Some(status) => {
-            //         let _ = git::switch_branch(Branch::Back(&tag));
-            //         Err(GitHubError::PullRequestCreate {
-            //             branch_name,
-            //             status,
-            //             tag,
-            //         })
-            //     }
-            //     None => Ok(()),
-            // };
         }
 
         pub fn env_token() -> Result<String, GitHubError> {
@@ -370,34 +363,6 @@ pub mod release {
                 _ => Err(GitHubError::EnvTokenNotFound),
             };
         }
-
-        // pub fn release_create(tag: Version) -> Result<(), GitHubError> {
-        //     let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-        //     let username = get_username().expect("Could not retrieve GitHub username");
-        //     let branch_name = format!("rc/{username}_{tag}");
-        //     let github_release_create_cmd = Command::new(github)
-        //         .current_dir(paths::project_root())
-        //         .args([
-        //             "release",
-        //             "create",
-        //             tag.to_string().as_str(),
-        //             "--target",
-        //             branch_name.as_str(),
-        //             "--prerelease", // TODO: remove this flag when we are ready for a stable release
-        //             "--generate-notes",
-        //         ])
-        //         .status()
-        //         .expect("Failed to create GitHub release");
-
-        //     return match github_release_create_cmd.code() {
-        //         Some(0) => Ok(()),
-        //         Some(status) => {
-        //             let _ = git::switch_branch(Branch::Back(&tag));
-        //             Err(GitHubError::ReleaseCreate { tag, status })
-        //         }
-        //         None => Ok(()),
-        //     };
-        // }
 
         pub fn get_username() -> Result<String, GitHubError> {
             let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
@@ -424,14 +389,11 @@ pub mod release {
             #[error("Bad GitHub credentials. Please check if the GITHUB_TOKEN in your /.env file is correctly configured and has the required permissions.")]
             EnvTokenInvalid,
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
-            Octocrab { error: Error },
-            #[error("octocrab.pulls().create() failed. Error: {error}")]
-            PullRequestCreate { error: Error },
-            // TODO: update final command
-            // #[error(
-            //     "`gh release create --prerelease --generate-notes` failed. Status code: {status}"
-            // )]
-            // ReleaseCreate { tag: Version, status: i32 },
+            OctocrabTokenBuild { error: Error },
+            #[error("`octocrab.repos().merge()` failed. Error: {error}")]
+            MergeCommit { error: Error },
+            #[error("`octocrab.pulls().create()` failed. Error: {error}")]
+            CreatePullRequest { error: Error },
         }
     }
 }
