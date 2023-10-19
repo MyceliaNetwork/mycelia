@@ -41,7 +41,7 @@ pub mod release {
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
         git::push_branch(tag.clone())?;
-        github::create_branch(tag_pre_bump, tag.clone()).await?;
+        github::merge_branch(tag_pre_bump, tag.clone()).await?;
         github::create_pr(tag.clone()).await?;
         // github::release_create(tag.clone())?;
 
@@ -292,7 +292,7 @@ pub mod release {
         use std::{env, process::Command};
         use thiserror::Error;
 
-        pub async fn create_branch(
+        pub async fn merge_branch(
             tag_pre_bump: Version,
             tag_post_bump: Version,
         ) -> Result<MergeCommit, GitHubError> {
