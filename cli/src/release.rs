@@ -251,8 +251,8 @@ pub mod release {
                         switch_branch(Branch::Back(&tag))?;
                     }
                     return Err(GitError::PushBranch {
-                        tag: tag.clone(),
-                        status: branch_already_exists,
+                        branch_name: branch_name.to_string(),
+                        status,
                     });
                 }
                 None => Ok(()),
@@ -275,8 +275,8 @@ pub mod release {
             AddAll { tag: Version, status: i32 },
             #[error("`commit -m \"Release {tag:}\"` failed. Status code: {status:}")]
             Commit { tag: Version, status: i32 },
-            #[error("`git push origin -u rc/{tag}` failed. Status code: {status}")]
-            PushBranch { tag: Version, status: i32 },
+            #[error("`git push origin -u {branch_name}` failed. Status code: {status}")]
+            PushBranch { branch_name: String, status: i32 },
         }
     }
 
