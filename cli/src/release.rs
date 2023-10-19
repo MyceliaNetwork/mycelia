@@ -311,7 +311,7 @@ pub mod release {
 
             let merge_commit = octocrab
                 .repos("MyceliaNetwork", "mycelia")
-                .merge(base, head)
+                .merge(base.clone(), head.clone())
                 .commit_message(commit_msg)
                 .send()
                 .await;
