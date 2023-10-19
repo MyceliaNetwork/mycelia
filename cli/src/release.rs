@@ -373,15 +373,18 @@ pub mod release {
                     format!("release/{tag_pre_bump}").to_string(),
                 ))
                 .await;
+            println!(
+                "🪵 [release.rs:385]~ token ~ \x1b[0;32mtag_post_bump\x1b[0m = {:#?}",
+                tag_post_bump
+            );
 
             let branch_post_bump = match branch_post_bump {
                 Ok(branch) => branch,
                 Err(error) => return Err(GitHubError::CreatePullRequest { error }),
             };
-
             println!(
-                "🪵 [release.rs:385]~ token ~ \x1b[0;32mtag_post_bump\x1b[0m = {:#?}",
-                tag_post_bump
+                "🪵 [release.rs:381]~ token ~ \x1b[0;32mbranch_post_bump\x1b[0m = {:#?}",
+                branch_post_bump
             );
 
             let x = octocrab::instance()
