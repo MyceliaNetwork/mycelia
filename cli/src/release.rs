@@ -391,7 +391,7 @@ pub mod release {
                 .repos("MyceliaNetwork", "mycelia")
                 .create_ref(
                     &Reference::Tag(tag_post_bump.to_string()),
-                    branch_post_bump.node_id,
+                    branch_post_bump.object.sha,
                 )
                 .await;
 
