@@ -22,7 +22,7 @@ pub mod release {
     }
 
     async fn try_release() -> Result<(), DynError> {
-        let tag_pre_bump = workspace::parse_cargo_pkg_version();
+        // let tag_pre_bump = workspace::parse_cargo_pkg_version();
 
         github::env_token()?;
         git::status()?;
@@ -41,7 +41,7 @@ pub mod release {
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
         git::push_branch(tag.clone())?;
-        github::merge_branch(tag_pre_bump, tag.clone()).await?;
+        // github::merge_branch(tag_pre_bump, tag.clone()).await?;
         github::create_pr(tag.clone()).await?;
         // github::release_create(tag.clone())?;
 
@@ -326,38 +326,38 @@ pub mod release {
         //     };
         // }
 
-        pub async fn merge_branch(
-            tag_pre_bump: Version,
-            tag_post_bump: Version,
-        ) -> Result<MergeCommit, GitHubError> {
-            let token = env_token()?;
-            let octocrab = Octocrab::builder().personal_token(token).build();
-            let octocrab = match octocrab {
-                Ok(octocrab) => octocrab,
-                Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
-            };
-            let username = get_username().expect("Could not retrieve GitHub username");
-            let base = format!("release/{tag_post_bump}");
-            let head = format!("release/{tag_pre_bump}");
-            let rc = format!("rc/{username}_{tag_post_bump}");
-            let commit_msg =
-                format!("Merge {base} into {head} to allow {rc} to be merged into for release");
+        // pub async fn merge_branch(
+        //     tag_pre_bump: Version,
+        //     tag_post_bump: Version,
+        // ) -> Result<MergeCommit, GitHubError> {
+        //     let token = env_token()?;
+        //     let octocrab = Octocrab::builder().personal_token(token).build();
+        //     let octocrab = match octocrab {
+        //         Ok(octocrab) => octocrab,
+        //         Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
+        //     };
+        //     let username = get_username().expect("Could not retrieve GitHub username");
+        //     let base = format!("release/{tag_post_bump}");
+        //     let head = format!("release/{tag_pre_bump}");
+        //     let rc = format!("rc/{username}_{tag_post_bump}");
+        //     let commit_msg =
+        //         format!("Merge {base} into {head} to allow {rc} to be merged into for release");
 
-            let merge_commit = octocrab
-                .repos("MyceliaNetwork", "mycelia")
-                .merge(head.clone(), base.clone())
-                .commit_message(commit_msg)
-                .send()
-                .await;
+        //     let merge_commit = octocrab
+        //         .repos("MyceliaNetwork", "mycelia")
+        //         .merge(head.clone(), base.clone())
+        //         .commit_message(commit_msg)
+        //         .send()
+        //         .await;
 
-            return match merge_commit {
-                Ok(commit) => Ok(commit),
-                Err(error) => {
-                    let _ = git::switch_branch(Branch::Back(&tag_post_bump));
-                    Err(GitHubError::MergeCommit { base, head, error })
-                }
-            };
-        }
+        //     return match merge_commit {
+        //         Ok(commit) => Ok(commit),
+        //         Err(error) => {
+        //             let _ = git::switch_branch(Branch::Back(&tag_post_bump));
+        //             Err(GitHubError::MergeCommit { base, head, error })
+        //         }
+        //     };
+        // }
 
         pub async fn create_pr(tag: Version) -> Result<PullRequest, GitHubError> {
             let token = env_token()?;
@@ -428,12 +428,12 @@ pub mod release {
             // CreateRef { error: Error },
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             OctocrabTokenBuild { error: Error },
-            #[error("`octocrab.repos().merge()` failed: {base} -> {head}  Error: {error}")]
-            MergeCommit {
-                base: String,
-                head: String,
-                error: Error,
-            },
+            // #[error("`octocrab.repos().merge()` failed: {base} -> {head}  Error: {error}")]
+            // MergeCommit {
+            //     base: String,
+            //     head: String,
+            //     error: Error,
+            // },
             #[error("`octocrab.pulls().create()` failed. Error: {error}")]
             CreatePullRequest { error: Error },
         }
