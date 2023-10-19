@@ -292,6 +292,37 @@ pub mod release {
         use std::{env, process::Command};
         use thiserror::Error;
 
+        // pub async fn create_ref(
+        //     tag: Version,
+        //     target_commit_sha: String, // should be main
+        // ) -> Result<Ref, GitHubError> {
+        //     let token = env_token()?;
+        //     let octocrab = Octocrab::builder().personal_token(token).build();
+        //     let octocrab = match octocrab {
+        //         Ok(octocrab) => octocrab,
+        //         Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
+        //     };
+        //     let main = octocrab::instance()
+        //         .repos("MyceliaNetwork", "mycelia")
+        //         .get_ref(&Reference::Branch("main".to_string()))
+        //         .await;
+
+        //     let params = CreateRefParams {
+        //         ref_: ref_path,
+        //         sha: target_commit_sha,
+        //     };
+
+        //     let git_ref = octocrab
+        //         .repos("MyceliaNetwork", "mycelia")
+        //         .create_ref(&Reference::Tag(tag.to_string()), target_commit_sha)
+        //         .await;
+
+        //     return match git_ref {
+        //         Ok(git_ref) => Ok(git_ref),
+        //         Err(error) => Err(GitHubError::CreateRef { error }),
+        //     };
+        // }
+
         pub async fn merge_branch(
             tag_pre_bump: Version,
             tag_post_bump: Version,
@@ -303,8 +334,8 @@ pub mod release {
                 Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
             };
             let username = get_username().expect("Could not retrieve GitHub username");
-            let base = format!("release/{tag_pre_bump}");
-            let head = format!("release/{tag_post_bump}");
+            let base = format!("release/{tag_post_bump}");
+            let head = format!("release/{tag_pre_bump}");
             let rc = format!("rc/{username}_{tag_post_bump}");
             let commit_msg =
                 format!("Merge {base} into {head} to allow {rc} to be merged into for release");
@@ -388,11 +419,13 @@ pub mod release {
             EnvTokenNotFound,
             #[error("Bad GitHub credentials. Please check if the GITHUB_TOKEN in your /.env file is correctly configured and has the required permissions.")]
             EnvTokenInvalid,
+            // #[error(
+            //     "`octocrab.repos().create_ref()` failed for branch_name (TODO). Error: {error}"
+            // )]
+            // CreateRef { error: Error },
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             OctocrabTokenBuild { error: Error },
-            #[error(
-                "`octocrab.repos().merge()` failed. Base -> HEAD: {base} -> {head}  Error: {error}"
-            )]
+            #[error("`octocrab.repos().merge()` failed: {base} -> {head}  Error: {error}")]
             MergeCommit {
                 base: String,
                 head: String,
