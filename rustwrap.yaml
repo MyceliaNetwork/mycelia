@@ -1,17 +1,17 @@
 targets:
   - platform: win32
     arch: x64
-    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/__VERSION__.zip
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/0.1.1.zip
   - platform: linux
     arch: x64
-    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/__VERSION__.tar.gz
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/0.1.1.tar.gz
   - platform: darwin
     arch: x64
-    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/__VERSION__.tar.gz
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/0.1.1.tar.gz
   # TODO: test this
   - platform: darwin
     arch: arm64
-    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/__VERSION__.tar.gz
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/0.1.1.tar.gz
 
 # provider: npm
 npm:
@@ -36,7 +36,7 @@ npm:
 #       desc "mycelia"
 #       homepage "http://www.mycelila.ooo"
 #       url "__URL__"
-#       version "__VERSION__"
+#       version "0.1.1"
 #       sha256 "__SHA__"
 
 #       def install

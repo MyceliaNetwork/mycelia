@@ -1,7 +1,7 @@
 [package]
 name = "mycelia_http"
 description = "guest side wasm http-client for general use in a compatible wasm component host. See docs for more info!"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/MyceliaNetwork/mycelia"
