@@ -394,6 +394,14 @@ pub mod release {
                 x
             );
 
+            let octocrab::models::repos::Object::Commit { sha, .. } = x else {
+                return Err(GitHubError::EnvTokenNotFound);
+            };
+            println!(
+                "🪵 [release.rs:412]~ token ~ \x1b[0;32msha\x1b[0m = {}",
+                sha
+            );
+
             let pr = octocrab
                 .pulls("MyceliaNetwork", "mycelia")
                 .create(title.clone(), head.clone(), base)
