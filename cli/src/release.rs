@@ -379,6 +379,11 @@ pub mod release {
                 Err(error) => return Err(GitHubError::CreatePullRequest { error }),
             };
 
+            println!(
+                "🪵 [release.rs:385]~ token ~ \x1b[0;32mtag_post_bump\x1b[0m = {:#?}",
+                tag_post_bump
+            );
+
             let x = octocrab::instance()
                 .repos("MyceliaNetwork", "mycelia")
                 .create_ref(
