@@ -22,7 +22,7 @@ pub mod release {
     }
 
     async fn try_release() -> Result<(), DynError> {
-        // let tag_pre_bump = workspace::parse_cargo_pkg_version();
+        let tag_pre_bump = workspace::parse_cargo_pkg_version();
 
         github::env_token()?;
         git::status()?;
@@ -42,7 +42,7 @@ pub mod release {
         git::commit(tag.clone())?;
         git::push_branch(tag.clone())?;
         // github::merge_branch(tag_pre_bump, tag.clone()).await?;
-        github::create_pr(tag.clone()).await?;
+        github::create_pr(tag_pre_bump, tag.clone()).await?;
         // github::release_create(tag.clone())?;
 
         git::switch_branch(Branch::Back(&tag))?;
@@ -286,11 +286,8 @@ pub mod release {
     pub mod github {
         use crate::release::release::git;
         use crate::release::release::Branch;
-        use octocrab::{
-            self,
-            models::{pulls::PullRequest, repos::MergeCommit},
-            Error, Octocrab,
-        };
+        use octocrab::params::repos::Reference;
+        use octocrab::{self, models::pulls::PullRequest, Error, Octocrab};
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
@@ -310,14 +307,9 @@ pub mod release {
         //         .get_ref(&Reference::Branch("main".to_string()))
         //         .await;
 
-        //     let params = CreateRefParams {
-        //         ref_: ref_path,
-        //         sha: target_commit_sha,
-        //     };
-
         //     let git_ref = octocrab
         //         .repos("MyceliaNetwork", "mycelia")
-        //         .create_ref(&Reference::Tag(tag.to_string()), target_commit_sha)
+        //         .create_ref(&Reference::Tag(tag.to_string()), main)
         //         .await;
 
         //     return match git_ref {
@@ -359,7 +351,10 @@ pub mod release {
         //     };
         // }
 
-        pub async fn create_pr(tag: Version) -> Result<PullRequest, GitHubError> {
+        pub async fn create_pr(
+            tag_pre_bump: Version,
+            tag_post_bump: Version,
+        ) -> Result<PullRequest, GitHubError> {
             let token = env_token()?;
             let octocrab = Octocrab::builder().personal_token(token).build();
             let octocrab = match octocrab {
@@ -367,10 +362,35 @@ pub mod release {
                 Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
             };
             let username = get_username().expect("Could not retrieve GitHub username");
-            let base = format!("release/{tag}");
-            let head = format!("rc/{username}_{tag}");
-            let title = format!("Release Candidate {tag}");
+            let base = format!("release/{tag_post_bump}");
+            let head = format!("rc/{username}_{tag_post_bump}");
+            let title = format!("Release Candidate {tag_post_bump}");
             let body = title.clone();
+
+            let branch_post_bump = octocrab::instance()
+                .repos("MyceliaNetwork", "mycelia")
+                .get_ref(&Reference::Branch(
+                    format!("release/{tag_pre_bump}").to_string(),
+                ))
+                .await;
+
+            let branch_post_bump = match branch_post_bump {
+                Ok(branch) => branch,
+                Err(error) => return Err(GitHubError::CreatePullRequest { error }),
+            };
+
+            let x = octocrab::instance()
+                .repos("MyceliaNetwork", "mycelia")
+                .create_ref(
+                    &Reference::Tag(tag_post_bump.to_string()),
+                    branch_post_bump.node_id,
+                )
+                .await;
+
+            match x {
+                Ok(_) => {}
+                Err(error) => return Err(GitHubError::CreatePullRequest { error }),
+            }
 
             let pr = octocrab
                 .pulls("MyceliaNetwork", "mycelia")
@@ -382,7 +402,7 @@ pub mod release {
             return match pr {
                 Ok(pr) => Ok(pr),
                 Err(error) => {
-                    let _ = git::switch_branch(Branch::Back(&tag));
+                    let _ = git::switch_branch(Branch::Back(&tag_post_bump));
                     Err(GitHubError::CreatePullRequest { error })
                 }
             };
