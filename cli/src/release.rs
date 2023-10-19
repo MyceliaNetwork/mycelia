@@ -378,27 +378,21 @@ pub mod release {
                 tag_post_bump
             );
 
-            let branch_post_bump = match branch_post_bump {
+            let branch_post_bump: octocrab::models::repos::Ref = match branch_post_bump {
                 Ok(branch) => branch,
                 Err(error) => return Err(GitHubError::CreatePullRequest { error }),
             };
+
             println!(
                 "🪵 [release.rs:381]~ token ~ \x1b[0;32mbranch_post_bump\x1b[0m = {:#?}",
                 branch_post_bump
             );
 
-            let x = octocrab::instance()
-                .repos("MyceliaNetwork", "mycelia")
-                .create_ref(
-                    &Reference::Tag(tag_post_bump.to_string()),
-                    branch_post_bump.object.sha,
-                )
-                .await;
-
-            match x {
-                Ok(_) => {}
-                Err(error) => return Err(GitHubError::CreatePullRequest { error }),
-            }
+            let x: octocrab::models::repos::Object = branch_post_bump.object;
+            println!(
+                "🪵 [release.rs:381]~ token ~ \x1b[0;32mbranch_post_bump\x1b[0m = {:#?}",
+                x
+            );
 
             let pr = octocrab
                 .pulls("MyceliaNetwork", "mycelia")
