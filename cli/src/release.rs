@@ -317,12 +317,7 @@ pub mod release {
 
             return match git_ref {
                 Ok(git_ref) => Ok(git_ref),
-                Err(error) => {
-                    return match error {
-                        "GitHub: Reference already exists" => Ok(()),
-                        _ => Err(GitHubError::CreateRef { error }),
-                    }
-                }
+                Err(error) => Err(GitHubError::CreateRef { error }),
             };
         }
 
@@ -391,11 +386,11 @@ pub mod release {
                 _ => return Err(GitHubError::CommitShaNotFound),
             };
 
-            create_ref(tag_post_bump.clone(), commit_sha).await?;
+            // match create_ref(tag_post_bump.clone(), commit_sha).await;
 
             let pr = octocrab
                 .pulls("MyceliaNetwork", "mycelia")
-                .create(title.clone(), head.clone(), base)
+                .create(title.clone(), head.clone(), base.as_str())
                 .body(body)
                 .send()
                 .await;
@@ -404,7 +399,7 @@ pub mod release {
                 Ok(pr) => Ok(pr),
                 Err(error) => {
                     let _ = git::switch_branch(Branch::Back(&tag_post_bump));
-                    Err(GitHubError::CreatePullRequest { error })
+                    Err(GitHubError::CreatePullRequest { head, base, error })
                 }
             };
         }
@@ -457,8 +452,12 @@ pub mod release {
             //     head: String,
             //     error: Error,
             // },
-            #[error("`octocrab.pulls().create()` failed. Error: {error}")]
-            CreatePullRequest { error: Error },
+            #[error("`octocrab.pulls().create()` failed. {head} -> {base} Error: {error}")]
+            CreatePullRequest {
+                head: String,
+                base: String,
+                error: Error,
+            },
         }
     }
 }
