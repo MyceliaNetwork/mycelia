@@ -40,7 +40,9 @@ pub mod release {
         git::switch_branch(Branch::Tag(&tag))?;
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
-        git::push_branch(tag.clone())?;
+        let username = github::get_username()?;
+        let branch_name = format!("rc/{username}_{tag}");
+        git::push_branch(branch_name)?;
         // github::merge_branch(tag_pre_bump, tag.clone()).await?;
         github::create_pr(tag_pre_bump, tag.clone()).await?;
         // github::release_create(tag.clone())?;
@@ -150,6 +152,28 @@ pub mod release {
             };
         }
 
+        pub fn checkout_branch(branch_name: String, orphan: String) -> Result<(), GitError> {
+            let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
+            info!("Checking out {branch_name} ");
+            let checkout_branch_cmd = Command::new(git)
+                .current_dir(paths::project_root())
+                .args(["checkout", "-b", branch_name.as_str(), orphan.as_str()])
+                .status()
+                .expect(format!("`git checkout -b {branch_name} {orphan}` failed").as_str());
+
+            return match checkout_branch_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => Err(GitError::CheckoutBranch {
+                    branch_name,
+                    orphan,
+                    status,
+                }),
+                None => Ok(()),
+            };
+        }
+
+        // git checkout -b new_branch_name origin/existing_branch_name_on_git_hub
+
         pub fn create_branch(tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username().expect("Could not retrieve GitHub username");
@@ -235,10 +259,9 @@ pub mod release {
             };
         }
 
-        pub fn push_branch(tag: Version) -> Result<(), GitError> {
+        pub fn push_branch(branch_name: String) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let username = github::get_username().expect("Could not retrieve GitHub username");
-            let branch_name = format!("rc/{username}_{tag}");
             let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
@@ -251,7 +274,8 @@ pub mod release {
                 Some(status) => {
                     let branch_already_exists: i32 = 128;
                     if status == branch_already_exists {
-                        switch_branch(Branch::Back(&tag))?;
+                        todo!("meh");
+                        // switch_branch(Branch::Back(&tag))?;
                     }
                     return Err(GitError::PushBranch {
                         branch_name: branch_name.to_string(),
@@ -280,6 +304,12 @@ pub mod release {
             Commit { tag: Version, status: i32 },
             #[error("`git push origin -u {branch_name}` failed. Status code: {status}")]
             PushBranch { branch_name: String, status: i32 },
+            #[error("`git checkout -b {branch_name} {orphan}")]
+            CheckoutBranch {
+                branch_name: String,
+                orphan: String,
+                status: i32,
+            },
         }
     }
 
@@ -288,10 +318,7 @@ pub mod release {
         use crate::release::release::Branch;
         use octocrab::{
             self,
-            models::{
-                pulls::PullRequest,
-                repos::{Object::Commit, Ref},
-            },
+            models::{pulls::PullRequest, repos::Ref},
             params::repos::Reference,
             Error, Octocrab,
         };
@@ -320,39 +347,6 @@ pub mod release {
                 Err(error) => Err(GitHubError::CreateRef { error }),
             };
         }
-
-        // pub async fn merge_branch(
-        //     tag_pre_bump: Version,
-        //     tag_post_bump: Version,
-        // ) -> Result<MergeCommit, GitHubError> {
-        //     let token = env_token()?;
-        //     let octocrab = Octocrab::builder().personal_token(token).build();
-        //     let octocrab = match octocrab {
-        //         Ok(octocrab) => octocrab,
-        //         Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
-        //     };
-        //     let username = get_username().expect("Could not retrieve GitHub username");
-        //     let base = format!("release/{tag_post_bump}");
-        //     let head = format!("release/{tag_pre_bump}");
-        //     let rc = format!("rc/{username}_{tag_post_bump}");
-        //     let commit_msg =
-        //         format!("Merge {base} into {head} to allow {rc} to be merged into for release");
-
-        //     let merge_commit = octocrab
-        //         .repos("MyceliaNetwork", "mycelia")
-        //         .merge(head.clone(), base.clone())
-        //         .commit_message(commit_msg)
-        //         .send()
-        //         .await;
-
-        //     return match merge_commit {
-        //         Ok(commit) => Ok(commit),
-        //         Err(error) => {
-        //             let _ = git::switch_branch(Branch::Back(&tag_post_bump));
-        //             Err(GitHubError::MergeCommit { base, head, error })
-        //         }
-        //     };
-        // }
 
         pub async fn create_pr(
             tag_pre_bump: Version,
@@ -387,6 +381,11 @@ pub mod release {
             // };
 
             // match create_ref(tag_post_bump.clone(), commit_sha).await;
+
+            let orphan = format!("origin/release/{tag_pre_bump}");
+            let _checkout_branch = git::checkout_branch(base.clone(), orphan);
+            git::push_branch(base.clone());
+            git::switch_branch(Branch::Back(&tag_post_bump));
 
             let pr = octocrab
                 .pulls("MyceliaNetwork", "mycelia")
