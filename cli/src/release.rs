@@ -359,7 +359,7 @@ pub mod release {
                 Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
             };
             let username = get_username().expect("Could not retrieve GitHub username");
-            let base = format!("refs/release/{tag_post_bump}");
+            let base = format!("release/{tag_post_bump}");
             let head = format!("rc/{username}_{tag_post_bump}");
             let title = format!("Release Candidate {tag_post_bump}");
             let body = title.clone();
