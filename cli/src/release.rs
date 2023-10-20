@@ -286,37 +286,40 @@ pub mod release {
     pub mod github {
         use crate::release::release::git;
         use crate::release::release::Branch;
-        use octocrab::params::repos::Reference;
-        use octocrab::{self, models::pulls::PullRequest, Error, Octocrab};
+        use octocrab::{
+            self,
+            models::{
+                pulls::PullRequest,
+                repos::{Object::Commit, Ref},
+            },
+            params::repos::Reference,
+            Error, Octocrab,
+        };
         use semver::Version;
         use std::{env, process::Command};
         use thiserror::Error;
 
-        // pub async fn create_ref(
-        //     tag: Version,
-        //     target_commit_sha: String, // should be main
-        // ) -> Result<Ref, GitHubError> {
-        //     let token = env_token()?;
-        //     let octocrab = Octocrab::builder().personal_token(token).build();
-        //     let octocrab = match octocrab {
-        //         Ok(octocrab) => octocrab,
-        //         Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
-        //     };
-        //     let main = octocrab::instance()
-        //         .repos("MyceliaNetwork", "mycelia")
-        //         .get_ref(&Reference::Branch("main".to_string()))
-        //         .await;
+        pub async fn create_ref(
+            tag: Version,
+            target_commit_sha: String,
+        ) -> Result<Ref, GitHubError> {
+            let token = env_token()?;
+            let octocrab = Octocrab::builder().personal_token(token).build();
+            let octocrab = match octocrab {
+                Ok(octocrab) => octocrab,
+                Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
+            };
 
-        //     let git_ref = octocrab
-        //         .repos("MyceliaNetwork", "mycelia")
-        //         .create_ref(&Reference::Tag(tag.to_string()), main)
-        //         .await;
+            let git_ref = octocrab
+                .repos("MyceliaNetwork", "mycelia")
+                .create_ref(&Reference::Tag(tag.to_string()), target_commit_sha)
+                .await;
 
-        //     return match git_ref {
-        //         Ok(git_ref) => Ok(git_ref),
-        //         Err(error) => Err(GitHubError::CreateRef { error }),
-        //     };
-        // }
+            return match git_ref {
+                Ok(git_ref) => Ok(git_ref),
+                Err(error) => Err(GitHubError::CreateRef { error }),
+            };
+        }
 
         // pub async fn merge_branch(
         //     tag_pre_bump: Version,
@@ -367,40 +370,23 @@ pub mod release {
             let title = format!("Release Candidate {tag_post_bump}");
             let body = title.clone();
 
-            let branch_post_bump = octocrab::instance()
+            let git_ref = octocrab::instance()
                 .repos("MyceliaNetwork", "mycelia")
                 .get_ref(&Reference::Branch(
                     format!("release/{tag_pre_bump}").to_string(),
                 ))
                 .await;
-            println!(
-                "🪵 [release.rs:385]~ token ~ \x1b[0;32mtag_post_bump\x1b[0m = {:#?}",
-                tag_post_bump
-            );
 
-            let branch_post_bump: octocrab::models::repos::Ref = match branch_post_bump {
-                Ok(branch) => branch,
-                Err(error) => return Err(GitHubError::CreatePullRequest { error }),
+            let git_ref: Ref = match git_ref {
+                Ok(git_ref) => git_ref,
+                Err(error) => return Err(GitHubError::RefNotFound { error }),
+            };
+            let commit_sha = match git_ref.object {
+                Commit { sha, .. } => sha,
+                _ => return Err(GitHubError::CommitShaNotFound),
             };
 
-            println!(
-                "🪵 [release.rs:381]~ token ~ \x1b[0;32mbranch_post_bump\x1b[0m = {:#?}",
-                branch_post_bump
-            );
-
-            let x: octocrab::models::repos::Object = branch_post_bump.object;
-            println!(
-                "🪵 [release.rs:381]~ token ~ \x1b[0;32mbranch_post_bump\x1b[0m = {:#?}",
-                x
-            );
-
-            let octocrab::models::repos::Object::Commit { sha, .. } = x else {
-                return Err(GitHubError::EnvTokenNotFound);
-            };
-            println!(
-                "🪵 [release.rs:412]~ token ~ \x1b[0;32msha\x1b[0m = {}",
-                sha
-            );
+            create_ref(tag_post_bump.clone(), commit_sha).await?;
 
             let pr = octocrab
                 .pulls("MyceliaNetwork", "mycelia")
@@ -452,10 +438,12 @@ pub mod release {
             EnvTokenNotFound,
             #[error("Bad GitHub credentials. Please check if the GITHUB_TOKEN in your /.env file is correctly configured and has the required permissions.")]
             EnvTokenInvalid,
-            // #[error(
-            //     "`octocrab.repos().create_ref()` failed for branch_name (TODO). Error: {error}"
-            // )]
-            // CreateRef { error: Error },
+            #[error("`octocrab.repos().create_ref()` failed. Error: {error}")]
+            CreateRef { error: Error },
+            #[error("Ref not found. Error: {error}")]
+            RefNotFound { error: Error },
+            #[error("Commit SHA not found in Ref Result")]
+            CommitShaNotFound,
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             OctocrabTokenBuild { error: Error },
             // #[error("`octocrab.repos().merge()` failed: {base} -> {head}  Error: {error}")]
