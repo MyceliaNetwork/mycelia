@@ -317,7 +317,12 @@ pub mod release {
 
             return match git_ref {
                 Ok(git_ref) => Ok(git_ref),
-                Err(error) => Err(GitHubError::CreateRef { error }),
+                Err(error) => {
+                    return match error {
+                        "GitHub: Reference already exists" => Ok(()),
+                        _ => Err(GitHubError::CreateRef { error }),
+                    }
+                }
             };
         }
 
