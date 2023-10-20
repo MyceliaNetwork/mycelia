@@ -365,26 +365,26 @@ pub mod release {
                 Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
             };
             let username = get_username().expect("Could not retrieve GitHub username");
-            let base = format!("release/{tag_post_bump}");
+            let base = format!("refs/release/{tag_post_bump}");
             let head = format!("rc/{username}_{tag_post_bump}");
             let title = format!("Release Candidate {tag_post_bump}");
             let body = title.clone();
 
-            let git_ref = octocrab::instance()
-                .repos("MyceliaNetwork", "mycelia")
-                .get_ref(&Reference::Branch(
-                    format!("release/{tag_pre_bump}").to_string(),
-                ))
-                .await;
+            // let git_ref = octocrab::instance()
+            //     .repos("MyceliaNetwork", "mycelia")
+            //     .get_ref(&Reference::Branch(
+            //         format!("release/{tag_pre_bump}").to_string(),
+            //     ))
+            //     .await;
 
-            let git_ref: Ref = match git_ref {
-                Ok(git_ref) => git_ref,
-                Err(error) => return Err(GitHubError::RefNotFound { error }),
-            };
-            let commit_sha = match git_ref.object {
-                Commit { sha, .. } => sha,
-                _ => return Err(GitHubError::CommitShaNotFound),
-            };
+            // let git_ref: Ref = match git_ref {
+            //     Ok(git_ref) => git_ref,
+            //     Err(error) => return Err(GitHubError::RefNotFound { error }),
+            // };
+            // let commit_sha = match git_ref.object {
+            //     Commit { sha, .. } => sha,
+            //     _ => return Err(GitHubError::CommitShaNotFound),
+            // };
 
             // match create_ref(tag_post_bump.clone(), commit_sha).await;
 
@@ -414,6 +414,7 @@ pub mod release {
             };
         }
 
+        // TODO: use octocat for this
         pub fn get_username() -> Result<String, GitHubError> {
             let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
             let get_username_cmd = Command::new(github)
