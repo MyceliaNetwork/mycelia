@@ -2,13 +2,12 @@
 pub mod release {
     use crate::paths::paths;
     use log::error;
-    use semver::Version;
 
     type DynError = Box<dyn std::error::Error>;
 
     pub enum Branch<'a> {
-        Back(&'a Version),
-        Tag(&'a Version),
+        Back,
+        Name(&'a String),
     }
 
     pub async fn release() -> Result<(), DynError> {
@@ -35,19 +34,16 @@ pub mod release {
             "__VERSION__",
             tag.to_string().as_str(),
         );
+        let username = github::get_username().await?;
+        let branch_name = format!("rc/{username}_{tag}");
 
-        git::create_branch(tag.clone())?;
-        git::switch_branch(Branch::Tag(&tag))?;
+        git::create_branch(tag.clone()).await?;
+        git::switch_branch(Branch::Name(&branch_name))?;
         git::add_all(tag.clone())?;
         git::commit(tag.clone())?;
-        let username = github::get_username()?;
-        let branch_name = format!("rc/{username}_{tag}");
-        git::push_branch(branch_name)?;
-        // github::merge_branch(tag_pre_bump, tag.clone()).await?;
+        git::push_branch(branch_name).await?;
         github::create_pr(tag_pre_bump, tag.clone()).await?;
-        // github::release_create(tag.clone())?;
-
-        git::switch_branch(Branch::Back(&tag))?;
+        git::switch_branch(Branch::Back)?;
 
         Ok::<(), DynError>(())
     }
@@ -132,6 +128,7 @@ pub mod release {
         use crate::release::release::Branch;
         use log::info;
         use semver::Version;
+
         use std::{env, process::Command};
         use thiserror::Error;
 
@@ -174,9 +171,11 @@ pub mod release {
 
         // git checkout -b new_branch_name origin/existing_branch_name_on_git_hub
 
-        pub fn create_branch(tag: Version) -> Result<(), GitError> {
+        pub async fn create_branch(tag: Version) -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = github::get_username().expect("Could not retrieve GitHub username");
+            let username = github::get_username()
+                .await
+                .expect("Could not retrieve GitHub username");
             let branch_name = format!("rc/{username}_{tag}");
             info!("Creating branch {branch_name}");
             let create_branch_cmd = Command::new(git)
@@ -197,14 +196,9 @@ pub mod release {
 
         pub fn switch_branch(branch: Branch) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = github::get_username().expect("Could not retrieve GitHub username");
             let branch_name = match branch {
-                Branch::Back(_) => "-".to_string(),
-                Branch::Tag(tag) => format!("rc/{username}_{tag}").to_string(),
-            };
-            let tag = match branch {
-                Branch::Back(tag) => tag,
-                Branch::Tag(tag) => tag,
+                Branch::Back => "-".to_string(),
+                Branch::Name(name) => name.to_string(),
             };
             let git_switch_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
@@ -217,7 +211,7 @@ pub mod release {
                 Some(status) => {
                     let branch_already_exists: i32 = 128;
                     if status == branch_already_exists {
-                        switch_branch(Branch::Back(tag))?;
+                        switch_branch(Branch::Back)?;
                     }
                     return Err(GitError::SwitchBranch {
                         branch_name,
@@ -259,9 +253,8 @@ pub mod release {
             };
         }
 
-        pub fn push_branch(branch_name: String) -> Result<(), GitError> {
+        pub async fn push_branch(branch_name: String) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let username = github::get_username().expect("Could not retrieve GitHub username");
             let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
@@ -274,8 +267,7 @@ pub mod release {
                 Some(status) => {
                     let branch_already_exists: i32 = 128;
                     if status == branch_already_exists {
-                        todo!("meh");
-                        // switch_branch(Branch::Back(&tag))?;
+                        switch_branch(Branch::Back)?;
                     }
                     return Err(GitError::PushBranch {
                         branch_name: branch_name.to_string(),
@@ -304,7 +296,7 @@ pub mod release {
             Commit { tag: Version, status: i32 },
             #[error("`git push origin -u {branch_name}` failed. Status code: {status}")]
             PushBranch { branch_name: String, status: i32 },
-            #[error("`git checkout -b {branch_name} {orphan}")]
+            #[error("`git checkout -b {branch_name} {orphan}` failed. Status code: {status}")]
             CheckoutBranch {
                 branch_name: String,
                 orphan: String,
@@ -323,7 +315,6 @@ pub mod release {
             Error, Octocrab,
         };
         use semver::Version;
-        use std::{env, process::Command};
         use thiserror::Error;
 
         pub async fn create_ref(
@@ -358,34 +349,22 @@ pub mod release {
                 Ok(octocrab) => octocrab,
                 Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
             };
-            let username = get_username().expect("Could not retrieve GitHub username");
+            let username = get_username()
+                .await
+                .expect("Could not retrieve GitHub username");
             let base = format!("release/{tag_post_bump}");
             let head = format!("rc/{username}_{tag_post_bump}");
             let title = format!("Release Candidate {tag_post_bump}");
             let body = title.clone();
 
-            // let git_ref = octocrab::instance()
-            //     .repos("MyceliaNetwork", "mycelia")
-            //     .get_ref(&Reference::Branch(
-            //         format!("release/{tag_pre_bump}").to_string(),
-            //     ))
-            //     .await;
-
-            // let git_ref: Ref = match git_ref {
-            //     Ok(git_ref) => git_ref,
-            //     Err(error) => return Err(GitHubError::RefNotFound { error }),
-            // };
-            // let commit_sha = match git_ref.object {
-            //     Commit { sha, .. } => sha,
-            //     _ => return Err(GitHubError::CommitShaNotFound),
-            // };
-
-            // match create_ref(tag_post_bump.clone(), commit_sha).await;
-
             let orphan = format!("origin/release/{tag_pre_bump}");
-            let _checkout_branch = git::checkout_branch(base.clone(), orphan);
-            git::push_branch(base.clone());
-            git::switch_branch(Branch::Back(&tag_post_bump));
+            let create_branch =
+                git::checkout_branch(base.clone(), orphan).expect("Checkout branch failed");
+            git::push_branch(base.clone())
+                .await
+                .expect("Pushing release branch as PR head ({head}) failed");
+            git::switch_branch(Branch::Back)
+                .expect("Switching back branch after Release branch creation failed");
 
             let pr = octocrab
                 .pulls("MyceliaNetwork", "mycelia")
@@ -397,14 +376,13 @@ pub mod release {
             return match pr {
                 Ok(pr) => Ok(pr),
                 Err(error) => {
-                    let _ = git::switch_branch(Branch::Back(&tag_post_bump));
+                    let _ = git::switch_branch(Branch::Back);
                     Err(GitHubError::CreatePullRequest { head, base, error })
                 }
             };
         }
 
         pub fn env_token() -> Result<String, GitHubError> {
-            // TODO: also test if user has the rights.
             // TODO: Next step would be to hide the `release` feature for users that do not have the rights
             let token = std::env::var("GITHUB_TOKEN");
             return match token {
@@ -413,22 +391,19 @@ pub mod release {
             };
         }
 
-        // TODO: use octocat for this
-        pub fn get_username() -> Result<String, GitHubError> {
-            let github = env::var("GH").unwrap_or_else(|_| "gh".to_string());
-            let get_username_cmd = Command::new(github)
-                .args(["api", "user", "-q", ".login"])
-                .output()
-                .expect("failed to run `git config user.name`")
-                .stdout;
+        pub async fn get_username() -> Result<String, GitHubError> {
+            let token = env_token()?;
+            let octocrab = Octocrab::builder().personal_token(token).build();
+            let octocrab = match octocrab {
+                Ok(octocrab) => octocrab,
+                Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
+            };
 
-            let username =
-                String::from_utf8(get_username_cmd).expect("Failed to convert user name to utf-8");
-            let username = username.trim().to_owned();
+            let author = octocrab.current().user().await;
 
-            return match username.contains("Bad credentials") {
-                true => Err(GitHubError::EnvTokenInvalid),
-                false => Ok(username),
+            return match author {
+                Ok(author) => Ok(author.login),
+                Err(_) => Err(GitHubError::EnvTokenInvalid),
             };
         }
 
@@ -440,18 +415,8 @@ pub mod release {
             EnvTokenInvalid,
             #[error("`octocrab.repos().create_ref()` failed. Error: {error}")]
             CreateRef { error: Error },
-            #[error("Ref not found. Error: {error}")]
-            RefNotFound { error: Error },
-            #[error("Commit SHA not found in Ref Result")]
-            CommitShaNotFound,
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             OctocrabTokenBuild { error: Error },
-            // #[error("`octocrab.repos().merge()` failed: {base} -> {head}  Error: {error}")]
-            // MergeCommit {
-            //     base: String,
-            //     head: String,
-            //     error: Error,
-            // },
             #[error("`octocrab.pulls().create()` failed. {head} -> {base} Error: {error}")]
             CreatePullRequest {
                 head: String,
