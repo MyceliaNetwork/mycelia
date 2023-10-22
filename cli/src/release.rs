@@ -10,6 +10,15 @@ pub mod release {
         Name(&'a String),
     }
 
+    impl<'a> ToString for Branch<'a> {
+        fn to_string(&self) -> String {
+            match self {
+                Branch::Back => "-".to_string(),
+                Branch::Name(s) => (*s).clone(),
+            }
+        }
+    }
+
     pub async fn release() -> Result<(), DynError> {
         if let Err(error) = try_release().await {
             error!("{error:#}");
@@ -196,10 +205,7 @@ pub mod release {
 
         pub fn switch_branch(branch: Branch) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
-            let branch_name = match branch {
-                Branch::Back => "-".to_string(),
-                Branch::Name(name) => name.to_string(),
-            };
+            let branch_name = branch.to_string();
             let git_switch_branch_cmd = Command::new(git)
                 .current_dir(paths::project_root())
                 .args(["switch", branch_name.as_str()])
