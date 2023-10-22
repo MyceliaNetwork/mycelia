@@ -55,16 +55,22 @@ pub mod release {
 
         let prev_release_branch_name = "release/0.1.0".to_string();
         let prev_release_branch = Branch::Name(&prev_release_branch_name);
-        let prev_release_git_ref = github::get_ref(prev_release_branch)
-            .await
-            .expect("Ref not found");
-        let prev_release_sha =
-            github::sha_from_ref(prev_release_git_ref).expect("Could not find SHA");
+        // let prev_release_git_ref = github::get_ref(prev_release_branch)
+        //     .await
+        //     .expect("Ref not found");
+        // let prev_release_sha =
+        //     github::sha_from_ref(prev_release_git_ref).expect("Could not find SHA");
+
         let new_branch_name = "heads/test_branch_creation_by_ref".to_string();
         let new_branch = Branch::Name(&new_branch_name);
-        github::create_ref(new_branch, prev_release_sha)
+
+        // github::create_ref(new_branch, prev_release_sha)
+        //     .await
+        //     .expect("meh meh");
+
+        github::merge_branch(new_branch, prev_release_branch)
             .await
-            .expect("meh meh");
+            .expect("meh");
 
         Ok::<(), DynError>(())
     }
@@ -326,11 +332,12 @@ pub mod release {
     pub mod github {
         use crate::release::release::git;
         use crate::release::release::Branch;
+        use log::info;
         use octocrab::{
             self,
             models::{
                 pulls::PullRequest,
-                repos::{Object, Object::Commit, Ref},
+                repos::{MergeCommit, Object, Object::Commit, Ref},
             },
             params::repos::Reference,
             Error, Octocrab,
@@ -384,6 +391,45 @@ pub mod release {
             return match object {
                 Commit { sha, .. } => Ok(sha),
                 _ => Err(GitHubError::ShaNotFound),
+            };
+        }
+
+        pub async fn merge_branch<'a>(
+            head: Branch<'a>,
+            base: Branch<'a>,
+        ) -> Result<MergeCommit, GitHubError> {
+            let head = head.to_string();
+            let base = base.to_string();
+            let token = env_token()?;
+            let octocrab = Octocrab::builder().personal_token(token).build();
+            let octocrab = match octocrab {
+                Ok(octocrab) => octocrab,
+                Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
+            };
+            let username = get_username()
+                .await
+                .expect("Could not retrieve GitHub username");
+
+            // let base = format!("release/{tag_post_bump}");
+            // let head = format!("release/p}");
+            // let rc = format!("rc/{username}_{tag_post_bump}");
+
+            let commit_msg = format!("Merge {base} into {head} to be merged into for release");
+            info!("{commit_msg}");
+
+            let merge_commit = octocrab
+                .repos("MyceliaNetwork", "mycelia")
+                .merge(head.clone(), base.clone())
+                .commit_message(commit_msg)
+                .send()
+                .await;
+
+            return match merge_commit {
+                Ok(commit) => Ok(commit),
+                Err(error) => {
+                    let _ = git::switch_branch(Branch::Back);
+                    Err(GitHubError::MergeCommit { base, head, error })
+                }
             };
         }
 
@@ -469,6 +515,12 @@ pub mod release {
             CreateRef { error: Error },
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             OctocrabTokenBuild { error: Error },
+            #[error("`octocrab.repos().merge()` failed: {base} -> {head}  Error: {error}")]
+            MergeCommit {
+                base: String,
+                head: String,
+                error: Error,
+            },
             #[error("`octocrab.pulls().create()` failed. {head} -> {base} Error: {error}")]
             CreatePullRequest {
                 head: String,
