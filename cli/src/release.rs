@@ -1,6 +1,5 @@
 #[allow(clippy::all)]
 pub mod release {
-    use crate::paths::paths;
     use log::error;
 
     type DynError = Box<dyn std::error::Error>;
@@ -30,29 +29,42 @@ pub mod release {
     }
 
     async fn try_release() -> Result<(), DynError> {
-        let tag_pre_bump = workspace::parse_cargo_pkg_version();
+        // let tag_pre_bump = workspace::parse_cargo_pkg_version();
 
-        github::env_token()?;
-        git::status()?;
-        workspace::bump()?;
+        // github::env_token()?;
+        // git::status()?;
+        // workspace::bump()?;
 
-        let tag = workspace::parse_cargo_pkg_version();
+        // let tag = workspace::parse_cargo_pkg_version();
 
-        workspace::replace_all_in_file(
-            paths::file_rustwrap(),
-            "__VERSION__",
-            tag.to_string().as_str(),
-        );
-        let username = github::get_username().await?;
-        let branch_name = format!("rc/{username}_{tag}");
+        // workspace::replace_all_in_file(
+        //     paths::file_rustwrap(),
+        //     "__VERSION__",
+        //     tag.to_string().as_str(),
+        // );
+        // let username = github::get_username().await?;
+        // let branch_name = format!("rc/{username}_{tag}");
 
-        git::create_branch(tag.clone()).await?;
-        git::switch_branch(Branch::Name(&branch_name))?;
-        git::add_all(tag.clone())?;
-        git::commit(tag.clone())?;
-        git::push_branch(branch_name).await?;
-        github::create_pr(tag_pre_bump, tag.clone()).await?;
-        git::switch_branch(Branch::Back)?;
+        // git::create_branch(tag.clone()).await?;
+        // git::switch_branch(Branch::Name(&branch_name))?;
+        // git::add_all(tag.clone())?;
+        // git::commit(tag.clone())?;
+        // git::push_branch(branch_name).await?;
+        // github::create_pr(tag_pre_bump, tag.clone()).await?;
+        // git::switch_branch(Branch::Back)?;
+
+        let prev_release_branch_name = "release/0.1.0".to_string();
+        let prev_release_branch = Branch::Name(&prev_release_branch_name);
+        let prev_release_git_ref = github::get_ref(prev_release_branch)
+            .await
+            .expect("Ref not found");
+        let prev_release_sha =
+            github::sha_from_ref(prev_release_git_ref).expect("Could not find SHA");
+        let new_branch_name = "heads/test_branch_creation_by_ref".to_string();
+        let new_branch = Branch::Name(&new_branch_name);
+        github::create_ref(new_branch, prev_release_sha)
+            .await
+            .expect("meh meh");
 
         Ok::<(), DynError>(())
     }
@@ -316,15 +328,31 @@ pub mod release {
         use crate::release::release::Branch;
         use octocrab::{
             self,
-            models::{pulls::PullRequest, repos::Ref},
+            models::{
+                pulls::PullRequest,
+                repos::{Object, Object::Commit, Ref},
+            },
             params::repos::Reference,
             Error, Octocrab,
         };
         use semver::Version;
         use thiserror::Error;
 
-        pub async fn create_ref(
-            tag: Version,
+        pub async fn get_ref<'a>(branch: Branch<'a>) -> Result<Ref, GitHubError> {
+            let branch = &Reference::Branch(branch.to_string());
+            let git_ref = octocrab::instance()
+                .repos("MyceliaNetwork", "mycelia")
+                .get_ref(branch)
+                .await;
+
+            return match git_ref {
+                Ok(git_ref) => Ok(git_ref),
+                Err(error) => return Err(GitHubError::CouldNotGetRef),
+            };
+        }
+
+        pub async fn create_ref<'a>(
+            branch: Branch<'a>,
             target_commit_sha: String,
         ) -> Result<Ref, GitHubError> {
             let token = env_token()?;
@@ -334,14 +362,28 @@ pub mod release {
                 Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
             };
 
+            let tag = Reference::Tag(branch.to_string());
             let git_ref = octocrab
                 .repos("MyceliaNetwork", "mycelia")
-                .create_ref(&Reference::Tag(tag.to_string()), target_commit_sha)
+                .create_ref(&tag, target_commit_sha)
                 .await;
 
             return match git_ref {
                 Ok(git_ref) => Ok(git_ref),
                 Err(error) => Err(GitHubError::CreateRef { error }),
+            };
+        }
+
+        pub fn sha_from_ref(git_ref: Ref) -> Result<String, GitHubError> {
+            let object: Object = git_ref.object;
+            // let Commit { sha, .. } = object else {
+            //     return Err(GitHubError::ShaNotFound);
+            // };
+            // return Ok(sha);
+
+            return match object {
+                Commit { sha, .. } => Ok(sha),
+                _ => Err(GitHubError::ShaNotFound),
             };
         }
 
@@ -419,6 +461,10 @@ pub mod release {
             EnvTokenNotFound,
             #[error("Bad GitHub credentials. Please check if the GITHUB_TOKEN in your /.env file is correctly configured and has the required permissions.")]
             EnvTokenInvalid,
+            #[error("Ref not found")]
+            CouldNotGetRef,
+            #[error("Ref SHA not found")]
+            ShaNotFound,
             #[error("`octocrab.repos().create_ref()` failed. Error: {error}")]
             CreateRef { error: Error },
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
