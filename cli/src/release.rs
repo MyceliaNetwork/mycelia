@@ -61,7 +61,7 @@ pub mod release {
         // let prev_release_sha =
         //     github::sha_from_ref(prev_release_git_ref).expect("Could not find SHA");
 
-        let new_branch_name = "heads/test_branch_creation_by_ref".to_string();
+        let new_branch_name = "vtest_branch_creation_by_ref".to_string();
         let new_branch = Branch::Name(&new_branch_name);
 
         // github::create_ref(new_branch, prev_release_sha)
