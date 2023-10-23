@@ -340,7 +340,7 @@ pub mod rc {
         }
 
         async fn create_ref<'a>(
-            branch: Branch<'a>,
+            tag: String,
             target_commit_sha: String,
         ) -> Result<Ref, GitHubError> {
             let token = env_token()?;
@@ -350,7 +350,7 @@ pub mod rc {
                 Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
             };
 
-            let tag = Reference::Tag(branch.to_string());
+            let tag = Reference::Tag(tag);
             let git_ref = octocrab
                 .repos("MyceliaNetwork", "mycelia")
                 .create_ref(&tag, target_commit_sha)
@@ -428,7 +428,7 @@ pub mod rc {
             git::checkout_branch(base.clone(), orphan).expect("Checkout branch failed");
             git::push_branch(base.clone())
                 .await
-                .expect("Pushing RC branch as PR head ({head}) failed");
+                .expect("Pushing RC branch as PR head failed");
             git::switch_branch(Branch::Back)
                 .expect("Switching back branch after RC branch creation failed");
 
@@ -457,9 +457,8 @@ pub mod rc {
             let prev_release_git_ref = get_ref(prev_release_branch).await?;
             let prev_release_sha = sha_from_ref(prev_release_git_ref).expect("SHA conversion");
 
-            let release_branch_name = format!("release/{tag_post_bump}");
-            let release_branch = Branch::Name(&release_branch_name);
-            create_ref(release_branch, prev_release_sha)
+            let release_tag_name = format!("v{tag_post_bump}");
+            create_ref(release_tag_name, prev_release_sha)
                 .await
                 .expect("Ref Creation");
             Ok(())
