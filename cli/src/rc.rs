@@ -52,7 +52,7 @@ pub mod rc {
         git::add_all(tag_post_bump.clone())?;
         git::commit(tag_post_bump.clone())?;
         git::push_branch(branch_name).await?;
-        git::switch_branch(Branch::Back);
+        git::switch_branch(Branch::Back)?;
         github::create_pr(tag_pre_bump.clone(), tag_post_bump.clone()).await?;
 
         Ok::<(), DynError>(())
