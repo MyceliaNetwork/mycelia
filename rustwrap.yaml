@@ -1,0 +1,45 @@
+targets:
+  - platform: win32
+    arch: x64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/0.1.1.zip
+  - platform: linux
+    arch: x64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/0.1.1.tar.gz
+  - platform: darwin
+    arch: x64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/0.1.1.tar.gz
+  # TODO: test this
+  - platform: darwin
+    arch: arm64
+    url_template: https://github.com/MyceliaNetwork/mycelia/archive/refs/tags/0.1.1.tar.gz
+
+# provider: npm
+npm:
+  publish: false # dont publish to npm, just generate the packages on disk
+  org: "@departurelabs"
+  name: mycelia
+  root:
+    name: mycelia
+    manifest: rustwrap/mycelia-root.json # NOTE: Not sure why both root & sub are necessary
+    readme: README.md
+  sub:
+    manifest: rustwrap/mycelia-sub.json # NOTE: Not sure why both root & sub are necessary
+    readme: README.md
+# provider: homebrew
+# brew:
+#   name: mycelia
+#   publish: false # push an update commit to the tap repo
+#   # tap: jondot/homebrew-tap
+#   recipe_fname: mycelia.rb
+#   recipe_template: |
+#     class mycelia < Formula
+#       desc "mycelia"
+#       homepage "http://www.mycelila.ooo"
+#       url "__URL__"
+#       version "0.1.1"
+#       sha256 "__SHA__"
+
+#       def install
+#         bin.install "mycelia"
+#       end
+#     end
