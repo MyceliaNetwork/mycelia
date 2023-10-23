@@ -29,48 +29,38 @@ pub mod release {
     }
 
     async fn try_release() -> Result<(), DynError> {
-        // let tag_pre_bump = workspace::parse_cargo_pkg_version();
+        let tag_pre_bump = workspace::parse_cargo_pkg_version();
 
-        // github::env_token()?;
-        // git::status()?;
-        // workspace::bump()?;
+        github::env_token()?;
+        git::status()?;
+        workspace::bump()?;
 
-        // let tag = workspace::parse_cargo_pkg_version();
+        let tag = workspace::parse_cargo_pkg_version();
 
-        // workspace::replace_all_in_file(
-        //     paths::file_rustwrap(),
-        //     "__VERSION__",
-        //     tag.to_string().as_str(),
-        // );
-        // let username = github::get_username().await?;
-        // let branch_name = format!("rc/{username}_{tag}");
+        workspace::replace_all_in_file(
+            paths::file_rustwrap(),
+            "__VERSION__",
+            tag.to_string().as_str(),
+        );
+        let username = github::get_username().await?;
+        let branch_name = format!("rc/{username}_{tag}");
 
-        // git::create_branch(tag.clone()).await?;
-        // git::switch_branch(Branch::Name(&branch_name))?;
-        // git::add_all(tag.clone())?;
-        // git::commit(tag.clone())?;
-        // git::push_branch(branch_name).await?;
-        // github::create_pr(tag_pre_bump, tag.clone()).await?;
-        // git::switch_branch(Branch::Back)?;
+        git::create_branch(tag.clone()).await?;
+        git::switch_branch(Branch::Name(&branch_name))?;
+        git::add_all(tag.clone())?;
+        git::commit(tag.clone())?;
+        git::push_branch(branch_name).await?;
+        github::create_pr(tag_pre_bump, tag.clone()).await?;
+        git::switch_branch(Branch::Back)?;
 
-        let prev_release_branch_name = "release/0.1.0".to_string();
+        let prev_release_branch_name = format!("release/{tag_pre_bump}");
         let prev_release_branch = Branch::Name(&prev_release_branch_name);
-        // let prev_release_git_ref = github::get_ref(prev_release_branch)
-        //     .await
-        //     .expect("Ref not found");
-        // let prev_release_sha =
-        //     github::sha_from_ref(prev_release_git_ref).expect("Could not find SHA");
+        let prev_release_git_ref = github::get_ref(prev_release_branch).await?;
+        let prev_release_sha = github::sha_from_ref(prev_release_git_ref)?;
 
-        let new_branch_name = "vtest_branch_creation_by_ref".to_string();
+        let new_branch_name = format!("release/{tag}");
         let new_branch = Branch::Name(&new_branch_name);
-
-        // github::create_ref(new_branch, prev_release_sha)
-        //     .await
-        //     .expect("meh meh");
-
-        github::merge_branch(new_branch, prev_release_branch)
-            .await
-            .expect("meh");
+        github::create_ref(new_branch, prev_release_sha).await?;
 
         Ok::<(), DynError>(())
     }
