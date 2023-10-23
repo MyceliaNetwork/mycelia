@@ -214,10 +214,6 @@ pub mod rc {
             return match git_switch_branch_cmd.code() {
                 Some(0) => Ok(()),
                 Some(status) => {
-                    let branch_already_exists: i32 = 128;
-                    if status == branch_already_exists {
-                        switch_branch(Branch::Back)?;
-                    }
                     return Err(GitError::SwitchBranch {
                         branch_name,
                         status: branch_already_exists,
