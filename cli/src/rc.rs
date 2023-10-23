@@ -444,7 +444,7 @@ pub mod rc {
             tag_pre_bump: Version,
             tag_post_bump: Version,
         ) -> Result<(), GitHubError> {
-            info!("Creating tag v{tag_post_bump}")
+            info!("Creating tag v{tag_post_bump}");
             let prev_release_branch_name = format!("release/{tag_pre_bump}");
             let prev_release_branch = Branch::Name(&prev_release_branch_name);
             let prev_release_git_ref = get_ref(prev_release_branch).await?;
