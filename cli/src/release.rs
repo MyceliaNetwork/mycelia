@@ -46,7 +46,7 @@ pub mod release {
         let username = github::get_username().await?;
         let branch_name = format!("rc/{username}_{tag_post_bump}");
 
-        github::create_tag(tag_pre_bump, tag_post_bump).await?;
+        github::create_tag(tag_pre_bump.clone(), tag_post_bump.clone()).await?;
         git::create_branch(tag_post_bump.clone()).await?;
         git::switch_branch(Branch::Name(&branch_name))?;
         git::add_all(tag_post_bump.clone())?;
