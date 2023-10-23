@@ -108,8 +108,11 @@ enum Commands {
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
     },
-    /// Release a new MyceliaVersion
+    /// Create a Release Candidate.
+    /// This creates a PR on the rc/* branch to merge into release/*
     Release,
+    /// Publish a Release
+    Publish,
 }
 
 #[tokio::main]
@@ -163,6 +166,9 @@ async fn try_main() -> Result<(), DynError> {
         }
         Commands::Release => {
             release().await?;
+        }
+        Commands::Publish => {
+            publish().await?;
         }
     }
 
