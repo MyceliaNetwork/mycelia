@@ -216,7 +216,7 @@ pub mod rc {
                 Some(status) => {
                     return Err(GitError::SwitchBranch {
                         branch_name,
-                        status: branch_already_exists,
+                        status,
                     });
                 }
                 None => Ok(()),
@@ -266,10 +266,6 @@ pub mod rc {
             return match git_push_branch_cmd.code() {
                 Some(0) => Ok(()),
                 Some(status) => {
-                    let branch_already_exists: i32 = 128;
-                    if status == branch_already_exists {
-                        switch_branch(Branch::Back)?;
-                    }
                     return Err(GitError::PushBranch {
                         branch_name: branch_name.to_string(),
                         status,
@@ -448,6 +444,7 @@ pub mod rc {
             tag_pre_bump: Version,
             tag_post_bump: Version,
         ) -> Result<(), GitHubError> {
+            info!("Creating tag v{tag_post_bump}")
             let prev_release_branch_name = format!("release/{tag_pre_bump}");
             let prev_release_branch = Branch::Name(&prev_release_branch_name);
             let prev_release_git_ref = get_ref(prev_release_branch).await?;
