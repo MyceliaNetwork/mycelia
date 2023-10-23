@@ -9,6 +9,7 @@ mod deploy;
 mod new;
 mod paths;
 mod publish;
+mod rc;
 mod release;
 mod start;
 mod stop;
@@ -17,6 +18,7 @@ pub use crate::build::build::build;
 pub use crate::deploy::deploy::deploy;
 pub use crate::new::new::new;
 pub use crate::publish::publish::publish;
+pub use crate::rc::rc::rc;
 pub use crate::release::release::release;
 pub use crate::start::start::start;
 pub use crate::stop::stop::stop;
@@ -110,6 +112,8 @@ enum Commands {
     },
     /// Create a Release Candidate.
     /// This creates a PR on the rc/* branch to merge into release/*
+    Rc,
+    /// Create GitHub Release from a merged Release Candidate
     Release,
     /// Publish a Release
     Publish,
@@ -163,6 +167,9 @@ async fn try_main() -> Result<(), DynError> {
             component,
         } => {
             deploy(ip, http_port, rpc_port, component).await;
+        }
+        Commands::Rc => {
+            rc().await?;
         }
         Commands::Release => {
             release().await?;
