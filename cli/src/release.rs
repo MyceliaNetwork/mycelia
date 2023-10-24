@@ -66,7 +66,7 @@ pub mod release {
                         "🪵 [release.rs:62]~ token ~ \x1b[0;32mbranch.name\x1b[0m = {}",
                         branch.name
                     );
-                    branch.name.starts_with("/release/")
+                    branch.name.starts_with("release/")
                 })
                 .map(|branch: Branch| {
                     return GitHubBranch { name: branch.name };
