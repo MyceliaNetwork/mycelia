@@ -42,8 +42,6 @@ pub mod publish {
             .repos("MyceliaNetwork", "mycelia")
             .releases()
             .list()
-            // Optional Parameters
-            .per_page(100)
             // Send the request
             .send()
             .await;
@@ -51,6 +49,7 @@ pub mod publish {
         return page;
     }
 
+    // FIXME: impl custom Display trait on external Release type
     #[derive(Debug)]
     struct GitHubRelease {
         id: ReleaseId,
@@ -80,12 +79,11 @@ pub mod publish {
         let selections: Vec<_> = selections
             .into_iter()
             .map(|release| {
-                let r = GitHubRelease {
+                return GitHubRelease {
                     id: release.id,
                     tag_name: release.tag_name,
                     created_at: release.created_at,
                 };
-                return r;
             })
             .collect();
         let selection = Select::with_theme(&ColorfulTheme::default())

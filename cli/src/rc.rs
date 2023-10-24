@@ -454,6 +454,7 @@ pub mod rc {
             create_ref(release_tag_name, prev_release_sha)
                 .await
                 .expect("Ref Creation");
+
             Ok(())
         }
 
@@ -488,14 +489,14 @@ pub mod rc {
             EnvTokenNotFound,
             #[error("Bad GitHub credentials. Please check if the GITHUB_TOKEN in your /.env file is correctly configured and has the required permissions.")]
             EnvTokenInvalid,
+            #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
+            OctocrabTokenBuild { error: Error },
             #[error("Ref not found. Error {error}")]
             CouldNotGetRef { error: Error },
             #[error("Ref SHA not found")]
             ShaNotFound,
             #[error("`octocrab.repos().create_ref()` failed. Error: {error}")]
             CreateRef { error: Error },
-            #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
-            OctocrabTokenBuild { error: Error },
             // #[error("`octocrab.repos().merge()` failed: {base} -> {head}  Error: {error}")]
             // MergeCommit {
             //     base: String,
