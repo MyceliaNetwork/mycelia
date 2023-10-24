@@ -479,7 +479,7 @@ pub mod rc {
 
             return match author {
                 Ok(author) => Ok(author.login),
-                Err(_) => Err(GitHubError::EnvTokenInvalid),
+                Err(error) => Err(GitHubError::Username { error }),
             };
         }
 
@@ -487,8 +487,8 @@ pub mod rc {
         pub enum GitHubError {
             #[error("GITHUB_TOKEN environment variable not found. IMPORTANT: add it to the .gitignored /.env file in the project root to make sure your secrets do not leak.")]
             EnvTokenNotFound,
-            #[error("Bad GitHub credentials. Please check if the GITHUB_TOKEN in your /.env file is correctly configured and has the required permissions.")]
-            EnvTokenInvalid,
+            #[error("Could not retrieve username. Error: {error}")]
+            Username { error: Error },
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             OctocrabTokenBuild { error: Error },
             #[error("Ref not found. Error {error}")]
