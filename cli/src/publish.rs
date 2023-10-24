@@ -101,11 +101,11 @@ pub mod publish {
 
     fn publish_pkg(release: &Release) -> Result<(), PublishError> {
         let rustwrap = env::var("RUSTWRAP").unwrap_or_else(|_| "rustwrap".to_string());
-        let version =
-            Version::parse(&release.tag_name).expect("Could not cast Release tag_name to Version");
+        let version = Version::parse(&release.tag_name.replace("v", ""))
+            .expect("Could not cast Release tag_name to Version");
         let rustwrap_cmd = Command::new(rustwrap)
             .current_dir(paths::project_root())
-            .args(["--tag", version.to_string().as_str()])
+            .args(["--tag", &release.tag_name.as_str()])
             .status()
             .expect("Failed to publish package");
 

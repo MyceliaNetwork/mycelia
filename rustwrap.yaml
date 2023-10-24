@@ -25,21 +25,21 @@ npm:
   sub:
     manifest: rustwrap/mycelia-sub.json # NOTE: Not sure why both root & sub are necessary
     readme: README.md
-# provider: homebrew
-# brew:
-#   name: mycelia
-#   publish: false # push an update commit to the tap repo
-#   # tap: jondot/homebrew-tap
-#   recipe_fname: mycelia.rb
-#   recipe_template: |
-#     class mycelia < Formula
-#       desc "mycelia"
-#       homepage "http://www.mycelila.ooo"
-#       url "__URL__"
-#       version "__VERSION__"
-#       sha256 "__SHA__"
+provider: homebrew
+brew:
+  name: mycelia
+  publish: false # push an update commit to the tap repo
+  tap: jondot/homebrew-tap
+  recipe_fname: mycelia.rb
+  recipe_template: |
+    class mycelia < Formula
+      desc "mycelia"
+      homepage "http://www.mycelila.ooo"
+      url "__URL__"
+      version "__VERSION__"
+      sha256 "__SHA__"
 
-#       def install
-#         bin.install "mycelia"
-#       end
-#     end
+      def install
+        bin.install "mycelia"
+      end
+    end
