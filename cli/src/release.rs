@@ -14,10 +14,10 @@ pub mod release {
     }
 
     async fn try_release() -> Result<(), DynError> {
-        let branches = github::release_branches().await?;
-        let branch_index = github::select_release(branches.clone().items).await?;
-        let branch = &branches.items[branch_index];
-        github::create_release(branch).await?;
+        let branches = github::branches().await?;
+        let branch_index = github::select_release(branches.clone()).await?;
+        let branch_name = &branches[branch_index];
+        github::create_release(branch_name).await?;
 
         Ok::<(), DynError>(())
     }
@@ -25,16 +25,41 @@ pub mod release {
     pub mod github {
         use dialoguer::{theme::ColorfulTheme, Select};
         use log::info;
-        use octocrab::{self, models::repos::Branch, Error, Octocrab};
+        use octocrab::{
+            self,
+            models::repos::{Branch, Release},
+            Error,
+        };
         use thiserror::Error;
 
-        pub async fn release_branches() -> Result<octocrab::Page<Branch>, GitHubError> {
-            let token = env_token()?;
-            let octocrab = Octocrab::builder().personal_token(token).build();
-            let octocrab = match octocrab {
-                Ok(octocrab) => octocrab,
-                Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
+        pub async fn release_branches() -> Result<Vec<String>, GitHubError> {
+            let releases = octocrab::instance()
+                .repos("MyceliaNetwork", "mycelia")
+                .releases()
+                .list()
+                .send()
+                .await;
+
+            let releases: Vec<Release> = match releases {
+                Ok(releases) => releases.items,
+                Err(error) => return Err(GitHubError::ListReleases { error }),
             };
+
+            let releases = releases
+                .into_iter()
+                .map(|release| release.target_commitish)
+                .collect::<Vec<_>>();
+
+            return Ok(releases);
+        }
+
+        pub async fn branches() -> Result<Vec<String>, GitHubError> {
+            let token = env_token()?;
+            // let octocrab = Octocrab::builder().personal_token(token).build();
+            // let octocrab = match octocrab {
+            //     Ok(octocrab) => octocrab,
+            //     Err(error) => return Err(GitHubError::OctocrabTokenBuild { error }),
+            // };
 
             let branches = octocrab::instance()
                 .repos("MyceliaNetwork", "mycelia")
@@ -43,10 +68,12 @@ pub mod release {
                 .await;
 
             return match branches {
-                Ok(branches) => Ok(branches),
+                Ok(branches) => Ok(branches.into_iter().map(|branch| branch.name).collect()),
                 Err(error) => return Err(GitHubError::ListBranches { error }),
             };
         }
+
+        // FIXME: impl custom Display trait on external Branch type
         #[derive(Debug)]
         pub struct GitHubBranch {
             name: String,
@@ -58,25 +85,15 @@ pub mod release {
             }
         }
 
-        pub async fn select_release(branches: Vec<Branch>) -> Result<usize, GitHubError> {
+        pub async fn select_release(branches: Vec<String>) -> Result<usize, GitHubError> {
+            let release_branches = release_branches().await?;
             let selections: Vec<_> = branches
                 .into_iter()
-                .filter(|branch: &Branch| {
-                    let b = println!(
-                        "🪵 [release.rs:62]~ token ~ \x1b[0;32mbranch.name\x1b[0m = {}",
-                        branch.name
-                    );
-                    branch.name.starts_with("release/")
-                })
-                .map(|branch: Branch| {
-                    return GitHubBranch { name: branch.name };
+                .filter(|branch_name| {
+                    let unreleased = !release_branches.contains(branch_name);
+                    unreleased && branch_name.starts_with("release/")
                 })
                 .collect();
-
-            println!(
-                "🪵 [release.rs:52]~ token ~ \x1b[0;32mselections\x1b[0m = {:#?}",
-                selections
-            );
 
             let selection = Select::with_theme(&ColorfulTheme::default())
                 .with_prompt("Choose which RC you would like to release")
@@ -91,8 +108,8 @@ pub mod release {
             };
         }
 
-        pub async fn create_release(branch: &Branch) -> Result<(), GitHubError> {
-            info!("Creating release for {}", branch.name);
+        pub async fn create_release(branch_name: &String) -> Result<(), GitHubError> {
+            info!("Creating release for {}", branch_name);
 
             Ok(())
         }
@@ -120,6 +137,8 @@ pub mod release {
             DidNotSelectRc,
             #[error("Error getting branches. Error: {error}")]
             ListBranches { error: Error },
+            #[error("Error getting releases. Error: {error}")]
+            ListReleases { error: Error },
         }
     }
 }
