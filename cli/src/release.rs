@@ -28,6 +28,20 @@ pub mod release {
         use octocrab::{self, models::repos::Release, Error, Octocrab};
         use thiserror::Error;
 
+        async fn filter_branches(branches: Vec<String>) -> Result<Vec<String>, GitHubError> {
+            let release_branches = release_branches().await?;
+            let branches: Vec<_> = branches
+                .into_iter()
+                .filter(|branch_name| branch_name.starts_with("release/"))
+                .filter(|branch_name| !release_branches.contains(branch_name))
+                .collect();
+
+            return match branches.len() {
+                0 => Err(GitHubError::NoBranchesToRelease),
+                _ => Ok(branches),
+            };
+        }
+
         pub async fn release_branches() -> Result<Vec<String>, GitHubError> {
             let releases = octocrab::instance()
                 .repos("MyceliaNetwork", "mycelia")
@@ -44,6 +58,7 @@ pub mod release {
             let releases = releases
                 .into_iter()
                 .map(|release| release.target_commitish)
+                .filter(|branch_name| branch_name.starts_with("release/"))
                 .collect::<Vec<_>>();
 
             return Ok(releases);
@@ -56,10 +71,18 @@ pub mod release {
                 .send()
                 .await;
 
-            return match branches {
-                Ok(branches) => Ok(branches.into_iter().map(|branch| branch.name).collect()),
+            let branches = match branches {
+                Ok(branches) => branches,
                 Err(error) => return Err(GitHubError::ListBranches { error }),
             };
+
+            let branches = branches
+                .into_iter()
+                .map(|branch| branch.name)
+                .filter(|branch_name| branch_name.starts_with("release/"))
+                .collect();
+
+            return filter_branches(branches).await;
         }
 
         // FIXME: impl custom Display trait on external Branch type
@@ -75,21 +98,12 @@ pub mod release {
         }
 
         pub async fn select_release(branches: Vec<String>) -> Result<usize, GitHubError> {
-            let release_branches = release_branches().await?;
-            let selections: Vec<_> = branches
-                .into_iter()
-                .filter(|branch_name| {
-                    let unreleased = !release_branches.contains(branch_name);
-                    unreleased && branch_name.starts_with("release/")
-                })
-                .collect();
-
             let selection = Select::with_theme(&ColorfulTheme::default())
                 .with_prompt("Choose which accepted Release Candidate you would like to release")
                 .default(0)
-                .items(&selections[..])
+                .items(&branches[..])
                 .interact_opt()
-                .expect("RC selection failed");
+                .expect("Release Candidate selection failed");
 
             return match selection {
                 Some(selection) => Ok(selection),
@@ -108,16 +122,14 @@ pub mod release {
             };
 
             let version = branch_name.replace("release/", "");
+            let tag = format!("v{version}");
             let name = format!("Release {version}");
-
-            let tag_name = format!("v{version}");
-            let name = format!("Release {version}");
-            let body = format!("Announcing {tag_name}!").to_string();
+            let body = format!("Announcing {tag}!").to_string();
 
             let release = octocrab
                 .repos("MyceliaNetwork", "mycelia")
                 .releases()
-                .create(&tag_name)
+                .create(&tag)
                 .target_commitish(branch_name)
                 .name(&name)
                 .body(&body)
@@ -125,7 +137,10 @@ pub mod release {
                 .await;
 
             return match release {
-                Ok(release) => Ok(release),
+                Ok(release) => {
+                    info!("Created release {tag}");
+                    Ok(release)
+                }
                 Err(error) => Err(GitHubError::CreateRelease { error }),
             };
         }
@@ -145,6 +160,8 @@ pub mod release {
             EnvTokenNotFound,
             #[error("`Octocrab::builder().personal_token(token).build()` failed. Error: {error}")]
             OctocrabTokenBuild { error: Error },
+            #[error("No branches to release")]
+            NoBranchesToRelease,
             #[error("Did not select a Release Candidate")]
             DidNotSelectRc,
             #[error("Error getting branches. Error: {error}")]
