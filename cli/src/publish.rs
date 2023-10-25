@@ -38,6 +38,7 @@ pub mod publish {
         let release = &releases[selection];
 
         create_package(&release)?;
+        patch_package(&release)?;
         publish_package(&release)?;
 
         Ok(())
@@ -125,6 +126,27 @@ pub mod publish {
         };
     }
 
+    fn patch_package(release: &Release) -> Result<(), PublishError> {
+        replace_all_in_file(
+            paths::file_npm_package_manifest(&release.tag_name.clone()),
+            "  \"name\": \"mycelia\",",
+            "  \"name\": \"@departurelabs/mycelia\",",
+        );
+
+        let bins = vec![
+            "mycelia-bin-win32-x64",
+            "mycelia-bin-linux-x64",
+            "mycelia-bin-darwin-x64",
+            "mycelia-bin-darwin-arm64",
+        ];
+
+        for bin in bins.iter() {
+            replace_all_in_file(paths::file_npm_info(&release.tag_name), bin, "mycelia/bin");
+        }
+
+        Ok(())
+    }
+
     fn publish_package(release: &Release) -> Result<(), PublishError> {
         let npm = env::var("NPM").unwrap_or_else(|_| "npm".to_string());
         let tag_name = &release.tag_name;
@@ -132,14 +154,8 @@ pub mod publish {
         let version = Version::parse(&tag).expect("Could not cast Release tag_name to Version");
         info!("Publishing {version}");
 
-        replace_all_in_file(
-            paths::npm_package_manifest(&release.tag_name.clone()),
-            "  \"name\": \"mycelia\",",
-            "  \"name\": \"@departurelabs/mycelia\",",
-        );
-
         let npm_publish_cmd = Command::new(npm)
-            .current_dir(paths::npm_package(&tag_name))
+            .current_dir(paths::dir_npm_package(&tag_name))
             .args(["publish"])
             .status()
             .expect("Failed to publish package");

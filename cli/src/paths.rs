@@ -37,12 +37,16 @@ pub mod paths {
         project_root().join("deployable")
     }
 
-    pub fn npm_package(tag: &String) -> PathBuf {
+    pub fn dir_npm_package(tag: &String) -> PathBuf {
         let path = format!("dist/mycelia-{tag}/npm/mycelia");
         project_root().join(path)
     }
 
-    pub fn npm_package_manifest(tag: &String) -> PathBuf {
-        npm_package(tag).join("package.json")
+    pub fn file_npm_package_manifest(tag: &String) -> PathBuf {
+        dir_npm_package(tag).join("package.json")
+    }
+
+    pub fn file_npm_info(tag: &String) -> PathBuf {
+        dir_npm_package(tag).join("info.json")
     }
 }
