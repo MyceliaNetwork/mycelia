@@ -157,7 +157,7 @@ pub mod start {
         let log_level = env::var("RUST_LOG").expect("env::var RUST_LOG not set");
         let mut process = Command::new(cargo)
             .env("RUST_LOG", log_level)
-            .current_dir(paths::project_root())
+            .current_dir(paths::dir_project_root())
             .args(&[
                 "run",
                 "--package=development_server",
@@ -267,7 +267,7 @@ pub mod start {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
         let _ = Command::new(cargo)
             .env("RUST_LOG", "off")
-            .current_dir(paths::project_root())
+            .current_dir(paths::dir_project_root())
             .args(&[
                 "run",
                 "--quiet",

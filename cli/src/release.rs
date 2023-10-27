@@ -122,7 +122,7 @@ pub mod release {
             };
 
             let version = branch_name.replace("release/", "");
-            let tag = format!("v{version}");
+            let tag = format!("{version}");
             let name = format!("Release {version}");
             let body = format!("Announcing {tag}!").to_string();
 

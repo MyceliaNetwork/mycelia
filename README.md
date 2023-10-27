@@ -58,13 +58,32 @@ RUST_LOG=info cargo run start # default
 RUST_LOG=trace cargo run start
 ```
 
-## Release
+## Release & Publish
 
-We use [rustwrap](https://github.com/rusty-ferris-club/rustwrap/tree/master) to publish our release binaries to npm and brew.
+### Prerequisites
+
+- [GitHub CLI](https://cli.github.com/): to create branches on origin
+- [rustup](https://rustup.rs/): to add target images
+- [cross](https://github.com/cross-rs/cross/tree/main): to build cross-platform releases
+- [docker](https://docs.docker.com/engine/install/): to build the `x86_64-unknown-linux-gnu` target
+
+### Install Rustup images
 
 ```sh
-cargo run build --workspace --release
-rustwrap --tag 0.1.0
+# rustup target add x86_64-unknown-linux-gnu # TODO: linux target support
+rustup target add x86_64-pc-windows-gnu
+rustup target add x86_64-apple-darwin
+rustup target add aarch64-apple-darwin
+```
+
+### Commands
+
+For the following commands you'll need the correct privileges on the Mycelia repository
+
+```sh
+cargo run rc # Creates RC PR. NOTE: you'll need GitHub approvals to get it merged first
+cargo run release # Creates GitHub release
+cargo run publish # Publishes binaries to npm
 ```
 
 ## Community & Contributing & Help

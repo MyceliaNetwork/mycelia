@@ -17,11 +17,10 @@ env_logger = { workspace = true }
 log = { workspace = true }
 open = "5.0.0"
 prost = "0.12.0"
-thiserror = "1.0.48"
+thiserror = { workspace = true }
 tokio = { version = "1.32.0", features = ["full"] }
 tonic = { version = "0.10.0" }
 semver = { workspace = true }
-rustwrap = "1.0.5"
 dialoguer = "0.11.0"
 octocrab = "0.31.2"
 cargo_metadata = "0.18.1"
@@ -33,6 +32,8 @@ mycelia_http = { path = "../guest_crates/mycelia_http" }
 protos = { path = "../protos" }
 resource_providers = { path = "../resource_providers" }
 dotenvy = "0.15.7"
+cross = "0.2.5"
+openssl = { version = "0.10.57", features = ["vendored"] }
 # function_service = { path = "../services/function" }
 # wasm_components = { path = "../wasm_components" }
 

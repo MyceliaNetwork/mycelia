@@ -40,7 +40,7 @@ pub mod deploy {
         rpc_port: &u16,
         component: &String,
     ) -> Result<(), DeploymentError> {
-        let path = paths::project_root().join(format!("components/{}.wasm", component));
+        let path = paths::dir_project_root().join(format!("components/{}.wasm", component));
         if !path.exists() {
             return Err(DeploymentError::PathNotFound {
                 component: component.clone(),

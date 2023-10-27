@@ -33,8 +33,10 @@ node_modules/
 # User project using `cargo run new`
 deployable/
 
-# Rustwrap
+# Mycelia npm Release
 dist/
+# rm this when done with publish
+dist_example/
 
 # dotenv files
 .env

@@ -1,6 +1,5 @@
 #[allow(clippy::all)]
 pub mod rc {
-    use crate::paths::paths;
     use log::error;
 
     type DynError = Box<dyn std::error::Error>;
@@ -37,12 +36,6 @@ pub mod rc {
         workspace::bump()?;
 
         let tag_post_bump = workspace::parse_cargo_pkg_version();
-
-        workspace::replace_all_in_file(
-            paths::file_rustwrap(),
-            "__VERSION__",
-            tag_post_bump.to_string().as_str(),
-        );
         let username = github::get_username().await?;
         let branch_name = format!("rc/{username}_{tag_post_bump}");
 
@@ -84,7 +77,7 @@ pub mod rc {
             let pre_bump_tag = parse_cargo_pkg_version();
             let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
             let cargo_workspaces_version_cmd = Command::new(cargo)
-                .current_dir(paths::project_root())
+                .current_dir(paths::dir_project_root())
                 .args([
                     "workspaces",
                     "version",
@@ -132,6 +125,47 @@ pub mod rc {
         }
     }
 
+    pub mod build {
+        use std::process::Command;
+        use thiserror::Error;
+
+        fn build_targets() -> Result<(), BuildError> {
+            let targets = [
+                "x86_64-unknown-linux-gnu", // # TODO: linux target support
+                "x86_64-pc-windows-gnu",
+                "x86_64-apple-darwin",
+                "aarch64-apple-darwin",
+            ];
+
+            for target in &targets {
+                cross_build(target)?;
+            }
+
+            Ok(())
+        }
+
+        fn cross_build(target: &str) -> Result<(), BuildError> {
+            let cross_build_cmd = Command::new("cross")
+                .args(["build", "--release", "--target", target])
+                .status()
+                .expect("`cross build` Command failed");
+
+            let target = target.to_string();
+
+            return match cross_build_cmd.code() {
+                Some(0) => Ok(()),
+                Some(status) => Err(BuildError::BuildTarget { target, status }),
+                None => Ok(()),
+            };
+        }
+
+        #[derive(Debug, Error)]
+        pub enum BuildError {
+            #[error("`cross build --release --target {target}` failed. Status code: {status}")]
+            BuildTarget { target: String, status: i32 },
+        }
+    }
+
     pub mod git {
         use crate::paths::paths;
         use crate::rc::rc::github;
@@ -145,7 +179,7 @@ pub mod rc {
         pub fn status() -> Result<(), GitError> {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let status_cmd = Command::new(git)
-                .current_dir(paths::project_root())
+                .current_dir(paths::dir_project_root())
                 .args(["status"])
                 .output()
                 .expect("`git status` failed")
@@ -163,7 +197,7 @@ pub mod rc {
             let git: String = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             info!("Checking out {branch_name} ");
             let checkout_branch_cmd = Command::new(git)
-                .current_dir(paths::project_root())
+                .current_dir(paths::dir_project_root())
                 .args(["checkout", "-b", branch_name.as_str(), orphan.as_str()])
                 .status()
                 .expect(format!("`git checkout -b {branch_name} {orphan}` failed").as_str());
@@ -187,7 +221,7 @@ pub mod rc {
             let branch_name = format!("rc/{username}_{tag}");
             info!("Creating branch {branch_name}");
             let create_branch_cmd = Command::new(git)
-                .current_dir(paths::project_root())
+                .current_dir(paths::dir_project_root())
                 .args(["branch", branch_name.as_str()])
                 .status()
                 .expect(format!("`git branch {branch_name}` failed").as_str());
@@ -206,7 +240,7 @@ pub mod rc {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let branch_name = branch.to_string();
             let git_switch_branch_cmd = Command::new(git)
-                .current_dir(paths::project_root())
+                .current_dir(paths::dir_project_root())
                 .args(["switch", branch_name.as_str()])
                 .status()
                 .expect(format!("Failed to run `git switch {branch_name}").as_str());
@@ -226,7 +260,7 @@ pub mod rc {
         pub fn add_all(tag: Version) -> Result<(), GitError> {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let git_add_all_cmd = Command::new(git)
-                .current_dir(paths::project_root())
+                .current_dir(paths::dir_project_root())
                 .args(&["add", "."])
                 .status()
                 .expect("Failed to run `git add .`");
@@ -242,7 +276,7 @@ pub mod rc {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let commit_msg = format!("Release Candidate {tag}");
             let git_commit_cmd = Command::new(git)
-                .current_dir(paths::project_root())
+                .current_dir(paths::dir_project_root())
                 .args(&["commit", "-m", commit_msg.as_str()])
                 .status()
                 .expect(format!("failed to run `git commit -m {commit_msg}").as_str());
@@ -258,7 +292,7 @@ pub mod rc {
             let git = env::var("GIT").unwrap_or_else(|_| "git".to_string());
             let branch_name = branch_name.as_str();
             let git_push_branch_cmd = Command::new(git)
-                .current_dir(paths::project_root())
+                .current_dir(paths::dir_project_root())
                 .args(["push", "-u", "origin", branch_name])
                 .status()
                 .expect(format!("Failed to run `git push -u origin {branch_name}").as_str());
@@ -444,13 +478,12 @@ pub mod rc {
             tag_pre_bump: Version,
             tag_post_bump: Version,
         ) -> Result<(), GitHubError> {
-            info!("Creating tag v{tag_post_bump}");
+            info!("Creating tag {tag_post_bump}");
             let prev_release_branch_name = format!("release/{tag_pre_bump}");
             let prev_release_branch = Branch::Name(&prev_release_branch_name);
             let prev_release_git_ref = get_ref(prev_release_branch).await?;
             let prev_release_sha = sha_from_ref(prev_release_git_ref).expect("SHA conversion");
-
-            let release_tag_name = format!("v{tag_post_bump}");
+            let release_tag_name = format!("{tag_post_bump}");
             create_ref(release_tag_name, prev_release_sha)
                 .await
                 .expect("Ref Creation");

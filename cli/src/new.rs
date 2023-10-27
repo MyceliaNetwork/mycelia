@@ -23,7 +23,7 @@ pub mod new {
     async fn try_new() -> Result<(), NewProjectError> {
         info!("Creating new Mycelia project");
 
-        let _ = fs::create_dir_all(&paths::deployable_target());
+        let _ = fs::create_dir_all(&paths::dir_deployable_target());
 
         let app_name: String = Input::with_theme(&ColorfulTheme::default())
             .with_prompt("Your app name")
@@ -38,11 +38,11 @@ pub mod new {
     }
 
     async fn scaffold_next(app_name: String) -> Result<(), NewProjectError> {
-        let _ = fs::create_dir_all(&paths::deployable_target());
+        let _ = fs::create_dir_all(&paths::dir_deployable_target());
         let (send, recv) = channel::<()>();
         let cargo = env::var("NPX").unwrap_or_else(|_| "npx".to_string());
         let mut npx_cmd = Command::new(cargo)
-            .current_dir(&paths::deployable_target())
+            .current_dir(&paths::dir_deployable_target())
             .args(&[
                 "create-next-app@latest",
                 app_name.as_str(),

@@ -10,6 +10,7 @@ repository = "https://github.com/MyceliaNetwork/mycelia"
 
 [build-dependencies]
 tonic-build = "0.10.0"
+protoc = "2.0.0"
 
 [dependencies]
 tonic-build = "0.10.0"

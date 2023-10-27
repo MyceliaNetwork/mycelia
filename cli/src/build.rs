@@ -84,7 +84,7 @@ pub mod build {
     fn workspace() -> Result<(), BuildError> {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
         let build_workspace_cmd = Command::new(cargo)
-            .current_dir(paths::project_root())
+            .current_dir(paths::dir_project_root())
             .args(["build", "--workspace"])
             .status()
             .expect("Failed to build workspace");
@@ -100,7 +100,7 @@ pub mod build {
     // fn workspace_release() -> Result<(), ReleaseError> {
     //     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     //     let cargo_build = Command::new(cargo)
-    //         .current_dir(paths::project_root())
+    //         .current_dir(paths::dir_project_root())
     //         .args(["build", "--workspace", "--release"])
     //         .status()
     //         .expect("Failed to build workspace");
@@ -115,7 +115,7 @@ pub mod build {
     fn wasm(guest: &Guest) -> Result<(), BuildError> {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
         let build_wasm_cmd = Command::new(cargo)
-            .current_dir(paths::project_root())
+            .current_dir(paths::dir_project_root())
             .args([
                 "build",
                 "--target=wasm32-wasi",
@@ -178,7 +178,7 @@ pub mod build {
         );
 
         let wasm_tools_cmd = Command::new(wasm_tools)
-            .current_dir(paths::project_root())
+            .current_dir(paths::dir_project_root())
             .args([
                 "component",
                 "new",
