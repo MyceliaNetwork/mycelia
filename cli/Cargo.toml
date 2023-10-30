@@ -34,6 +34,7 @@ resource_providers = { path = "../resource_providers" }
 dotenvy = "0.15.7"
 cross = "0.2.5"
 openssl = { workspace = true }
+bytes = { workspace = true }
 # function_service = { path = "../services/function" }
 # wasm_components = { path = "../wasm_components" }
 

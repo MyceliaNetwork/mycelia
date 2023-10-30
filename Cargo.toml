@@ -37,3 +37,5 @@ http = { version = "0.2.9" }
 tower = { version = "0.4.13" }
 hyper = { version = "0.14.27" }
 semver = { version = "1.0.19" }
+openssl = { version = "0.10.57" }
+bytes = { version = "1.5.0" }
