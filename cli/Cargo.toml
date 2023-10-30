@@ -33,7 +33,7 @@ protos = { path = "../protos" }
 resource_providers = { path = "../resource_providers" }
 dotenvy = "0.15.7"
 cross = "0.2.5"
-openssl = { version = "0.10.57", features = ["vendored"] }
+openssl = { workspace = true }
 # function_service = { path = "../services/function" }
 # wasm_components = { path = "../wasm_components" }
 
