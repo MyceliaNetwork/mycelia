@@ -11,7 +11,6 @@ jobs:
             x86_64-pc-windows-gnu,
             x86_64-unknown-linux-musl,
             x86_64-apple-darwin,
-            aarch64-apple-darwin,
           ]
     steps:
       - name: Checkout
@@ -25,6 +24,8 @@ jobs:
         uses: rust-build/rust-build.action@v1.4.4
         with:
           RUSTTARGET: ${{ matrix.target }}
+          SRC_DIR: cli
+          ARCHIVE_TYPES: zip targ.gz
       - name: Tar compiled binaries
         uses: a7ul/tar-action@v1.1.3
         with:
