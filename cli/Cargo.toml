@@ -32,7 +32,7 @@ mycelia_http = { path = "../guest_crates/mycelia_http" }
 protos = { path = "../protos" }
 resource_providers = { path = "../resource_providers" }
 dotenvy = "0.15.7"
-cross = "0.2.5"
+cross = "0.2.5"                                          # TODO: this doesn't work. Should be using cargo install. Can automate?
 openssl = { workspace = true }
 bytes = { workspace = true }
 # function_service = { path = "../services/function" }
