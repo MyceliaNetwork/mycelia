@@ -24,6 +24,7 @@ jobs:
         uses: rust-build/rust-build.action@v1.4.4
         with:
           RUSTTARGET: ${{ matrix.target }}
+          PRE_BUILD: sudo apt-get install libssl-dev
           SRC_DIR: cli
           ARCHIVE_TYPES: zip targ.gz
       - name: Tar compiled binaries
