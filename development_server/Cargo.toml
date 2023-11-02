@@ -1,5 +1,6 @@
-[package]
+[[lib]]
 name = "development_server"
+path = "src/lib.rs"
 description = "Mycelia development server"
 version = "0.1.0"
 edition = "2021"
