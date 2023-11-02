@@ -27,7 +27,7 @@ cargo_metadata = "0.18.1"
 chrono = "0.4.31"
 
 development_server = { path = "../development_server" }
-mycelia_guest_function = { path = "../guests/function" }
+# mycelia_guest_function = { path = "../guests/function" }
 mycelia_http = { path = "../guest_crates/mycelia_http" }
 protos = { path = "../protos" }
 resource_providers = { path = "../resource_providers" }
