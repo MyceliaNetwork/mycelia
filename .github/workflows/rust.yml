@@ -18,12 +18,14 @@ jobs:
         uses: hecrj/setup-rust-action@v2
         with:
           rust-version: stable
+      - name: Setup protoc
+        uses: arduino/setup-protoc@v2.1.0
       - name: Compile
         id: compile
         uses: rust-build/rust-build.action@v1.4.4
         with:
           RUSTTARGET: ${{ matrix.target }}
-          PRE_BUILD: apt install -y protoc protobuf-compiler libprotobuf-dev libssl-dev
+          PRE_BUILD: apt install -y libssl-dev
           SRC_DIR: cli
           ARCHIVE_TYPES: zip tar.gz tar.xz
       - name: Tar compiled binaries
