@@ -1,5 +1,4 @@
 [package]
-crate-type = ["lib"]
 name = "development_server"
 description = "Mycelia development server"
 version = "0.1.0"
