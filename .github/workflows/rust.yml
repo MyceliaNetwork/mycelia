@@ -23,7 +23,7 @@ jobs:
         uses: rust-build/rust-build.action@v1.4.4
         with:
           RUSTTARGET: ${{ matrix.target }}
-          PRE_BUILD: sudo apt-get apt update && apt upgrade -y && apt install -y protobuf-compiler libprotobuf-dev libssl-dev
+          PRE_BUILD: sudo apt-get apt update && apt upgrade -y && apk add protoc protobuf-dev && apt install -y protoc protobuf-compiler libprotobuf-dev libssl-dev
           SRC_DIR: cli
           ARCHIVE_TYPES: zip targ.gz
       - name: Tar compiled binaries
