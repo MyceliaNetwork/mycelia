@@ -23,6 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
+          sudo apt-get install musl-tools
           sudo apt install -y protoc protobuf-compiler libprotobuf-dev libssl-dev
       - name: Compile
         id: compile
