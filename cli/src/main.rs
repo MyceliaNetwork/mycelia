@@ -90,7 +90,10 @@ struct DevelopmentServerClient {
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Build the entire Mycelia project
-    Build,
+    Build {
+        /// The target to build to.
+        target: Option<String>,
+    },
     /// Start the Mycelia development server
     Start {
         /// The ip to listen on.
@@ -176,8 +179,8 @@ async fn try_main() -> Result<(), DynError> {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Commands::Build => {
-            build()?;
+        Commands::Build { target } => {
+            build(target.clone())?;
         }
         Commands::Start {
             ip,

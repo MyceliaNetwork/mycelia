@@ -1,13 +1,14 @@
 #[allow(clippy::all)]
 pub mod build {
     use crate::paths::paths;
+    use current_platform::CURRENT_PLATFORM;
     use log::info;
     use std::{cmp::Ordering, collections::HashMap, env, fs, path::PathBuf, process::Command};
     use thiserror::Error;
 
     type DynError = Box<dyn std::error::Error>;
 
-    pub fn build() -> Result<(), DynError> {
+    pub fn build(target: Option<String>) -> Result<(), DynError> {
         info!("Building Mycelia project");
         fs::create_dir_all(&paths::dir_target())?;
         fs::create_dir_all(&paths::dir_components())?;
@@ -17,7 +18,7 @@ pub mod build {
             component(&guest)?;
         }
 
-        workspace()?;
+        workspace(target)?;
 
         Ok(())
     }
@@ -81,11 +82,16 @@ pub mod build {
         return guests_filtered;
     }
 
-    fn workspace() -> Result<(), BuildError> {
+    fn workspace(target: Option<String>) -> Result<(), BuildError> {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let target = format!(
+            "--target={}",
+            target.unwrap_or(CURRENT_PLATFORM.to_string())
+        );
+        info!("Building workspace with target: {}", target);
         let build_workspace_cmd = Command::new(cargo)
             .current_dir(paths::dir_project_root())
-            .args(["build", "--workspace"])
+            .args(["build", "--workspace", "--release", target.as_str()])
             .status()
             .expect("Failed to build workspace");
 
