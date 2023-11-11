@@ -15,7 +15,7 @@ members = [
   "services/function",
 
   # Guests
-  "guests/function",
+  "guests/mycelia_guest_function",
   "guests/js_function",
 ]
 

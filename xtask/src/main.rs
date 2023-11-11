@@ -62,8 +62,8 @@ impl Guest {
 // 4. Order the items by priority. Because packages like `function` should be built last
 fn guests() -> Vec<Guest> {
     let dir = fs::read_dir(&dir_guests()).unwrap();
-    let name_map = HashMap::from([("function", "mycelia_guest_function")]);
-    let priority = vec!["*".to_string(), "function".to_string()];
+    let name_map = HashMap::from([("js_function", "mycelia_guest_function")]);
+    let priority = vec!["*".to_string(), "mycelia_guest_function".to_string()];
 
     let mut guests_filtered = dir
         .map(|p| p.unwrap().path())
@@ -97,8 +97,8 @@ fn build() -> Result<(), DynError> {
     for guest in guests() {
         build_wasm(&guest)?;
         build_component(&guest)?;
-        build_workspace()?;
     }
+    build_workspace()?;
 
     Ok(())
 }
