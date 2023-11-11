@@ -1,4 +1,4 @@
-name: Rust build rc
+name: Rust build RC
 
 on:
   push:
