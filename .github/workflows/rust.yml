@@ -23,8 +23,9 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt-get install musl-tools
-          sudo apt install -y protoc protobuf-compiler libprotobuf-dev libssl-dev
+          sudo apt install node
+          npm i -g grpc-tools
+          sudo apt install -y musl-tools grpc-tools protoc protobuf-compiler libprotobuf-dev libssl-dev
       - name: Compile
         id: compile
         uses: rust-build/rust-build.action@v1.4.4
