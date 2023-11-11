@@ -15,8 +15,9 @@ pub mod build {
         for guest in guests() {
             wasm(&guest)?;
             component(&guest)?;
-            workspace()?;
         }
+
+        workspace()?;
 
         Ok(())
     }
