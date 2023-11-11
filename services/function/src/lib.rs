@@ -2,7 +2,7 @@ mod bindgen {
     use wasmtime::component::*;
 
     bindgen!({
-      path: "../../guests/function/wit",
+      path: "../../guests/mycelia_guest_function/wit",
       world: "function-world",
       async: true
     });
@@ -199,7 +199,7 @@ pub mod service {
     }
 
     pub fn empty_base_function_component() -> Component {
-        let bytes = include_bytes!("../../../components/function-component.wasm");
+        let bytes = include_bytes!("../../../components/mycelia_guest_function-component.wasm");
 
         wasmtime_components::runtime::new_component_from_bytes(bytes).expect(
             "base function component is corrupted. did you specify the correct componnent path?",
@@ -232,8 +232,11 @@ pub mod service {
 
             let _ = add_to_linker(&mut linker).unwrap();
 
-            let test_function_component =
-                Component::from_file(&engine, "../../components/function-component.wasm").unwrap();
+            let test_function_component = Component::from_file(
+                &engine,
+                "../../components/mycelia_guest_function-component.wasm",
+            )
+            .unwrap();
 
             let (bindings, instance) =
                 FunctionWorld::instantiate_async(&mut store, &test_function_component, &linker)
