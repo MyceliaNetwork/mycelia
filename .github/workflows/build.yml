@@ -32,8 +32,8 @@ jobs:
       - name: Build for target
         uses: actions-rs/cargo@v1
         with:
-          command: run build
-          args: ${{ matrix.target }}
+          command: run
+          args: build ${{ matrix.target }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
