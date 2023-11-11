@@ -1,0 +1,39 @@
+{
+  "name": "mycelia",
+  "description": "Mycelia SDK",
+  "bin": "bin/mycelia",
+  "private": false,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "postinstall": "node postinstall.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MyceliaNetwork/mycelia.git"
+  },
+  "keywords": [
+    "mycelia",
+    "wasm",
+    "WebAssembly",
+    "sdk",
+    "Rust",
+    "JavaScript",
+    "TypeScript"
+  ],
+  "author": "Departure Labs",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MyceliaNetwork/mycelia/issues"
+  },
+  "homepage": "https://github.com/MyceliaNetwork/mycelia#readme",
+  "version": "v0.1.1",
+  "optionalDependencies": {
+    "@departurelabs/mycelia-bin-darwin-x64": "v0.1.1",
+    "@departurelabs/mycelia-bin-darwin-arm64": "v0.1.1"
+  },
+  "files": [
+    "postinstall.js",
+    "info.json",
+    "bin/*"
+  ]
+}

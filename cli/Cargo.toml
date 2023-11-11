@@ -1,8 +1,13 @@
 [package]
 name = "cli"
+description = "Mycelia Command Line Interface"
 version = "0.1.0"
 edition = "2021"
 default-run = "cli"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MyceliaNetwork/mycelia"
+authors = ["Daniel Terwiel <dani+mycelia@departure.dev>"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,9 +17,30 @@ env_logger = { workspace = true }
 log = { workspace = true }
 open = "5.0.0"
 prost = "0.12.0"
-thiserror = "1.0.48"
+thiserror = { workspace = true }
 tokio = { version = "1.32.0", features = ["full"] }
 tonic = { version = "0.10.0" }
+semver = { workspace = true }
+dialoguer = "0.11.0"
+octocrab = "0.31.2"
+cargo_metadata = "0.18.1"
+chrono = "0.4.31"
+
+development_server = { path = "../development_server" }
+# mycelia_guest_function = { path = "../guests/function" }
+mycelia_http = { path = "../guest_crates/mycelia_http" }
+protos = { path = "../protos" }
+resource_providers = { path = "../resource_providers" }
+dotenvy = "0.15.7"
+cross = "0.2.5"                                          # TODO: this doesn't work. Should be using cargo install. Can automate?
+openssl = { workspace = true }
+bytes = { workspace = true }
+# function_service = { path = "../services/function" }
+# wasm_components = { path = "../wasm_components" }
 
 [build-dependencies]
 tonic-build = "0.10.0"
+
+# [[bin]]
+# name = "mycelia"
+# path = "src/main.rs"

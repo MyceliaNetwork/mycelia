@@ -1,7 +1,6 @@
 [workspace]
 members = [
   # Tooling
-  "xtask",
   "protos",
   "cli",
   "development_server",
@@ -22,6 +21,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
+version-compare = { version = "0.1.1" }
 anyhow = "1.0.75"
 async-trait = "0.1.73"
 log = "0.4.20"
@@ -30,9 +30,12 @@ wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = 
   "component-model",
 ] }
 wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main" }
-thiserror = "1.0.48"
+thiserror = { version = "1.0.48" }
 tokio = { version = "1.3.2" }
 wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen", branch = "main" }
-http = "0.2.9"
+http = { version = "0.2.9" }
 tower = { version = "0.4.13" }
 hyper = { version = "0.14.27" }
+semver = { version = "1.0.19" }
+openssl = { version = "0.10.57" }
+bytes = { version = "1.5.0" }

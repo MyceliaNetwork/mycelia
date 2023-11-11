@@ -1,14 +1,19 @@
 [package]
 name = "wasmtime_components"
+description = "A library for running Wasmtime components"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MyceliaNetwork/mycelia"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = { workspace = true }
 tokio = { version = "1.32.0", features = ["full"] }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main", features = ["component-model"] }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main"}
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main", features = [
+  "component-model",
+] }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime.git", branch = "main" }
 tower = { version = "0.4.13", features = ["full"] }
 lazy_static = "1.4.0"

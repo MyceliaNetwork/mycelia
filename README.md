@@ -8,7 +8,7 @@ Open Source Application Stack &amp; PaaS
 cargo run build
 ```
 
-**IMPORTANT**: `cargo build` will fail because we have to use [cargo-xtask](https://github.com/matklad/cargo-xtask/) to build the ./components/ folder before building the project. Reason: Cargo's build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
+**IMPORTANT**: `cargo build` will fail because we have to build the ./components/ folder before building the project. Reason: Cargo's build.rs is [not supported for workspaces](https://github.com/rust-lang/cargo/issues/8732#issuecomment-950252765)
 
 ## CLI
 
@@ -56,6 +56,34 @@ RUST_LOG=warn cargo run start
 RUST_LOG=debug cargo run start
 RUST_LOG=info cargo run start # default
 RUST_LOG=trace cargo run start
+```
+
+## Release & Publish
+
+### Prerequisites
+
+- [GitHub CLI](https://cli.github.com/): to create branches on origin
+- [rustup](https://rustup.rs/): to add target images
+- [cross](https://github.com/cross-rs/cross/tree/main): to build cross-platform releases
+- [docker](https://docs.docker.com/engine/install/): to build the `x86_64-unknown-linux-gnu` target
+
+### Install Rustup images
+
+```sh
+# rustup target add x86_64-unknown-linux-gnu # TODO: linux target support
+rustup target add x86_64-pc-windows-gnu
+rustup target add x86_64-apple-darwin
+rustup target add aarch64-apple-darwin
+```
+
+### Commands
+
+For the following commands you'll need the correct privileges on the Mycelia repository
+
+```sh
+cargo run rc # Creates RC PR. NOTE: you'll need GitHub approvals to get it merged first
+cargo run release # Creates GitHub release
+cargo run publish # Publishes binaries to npm
 ```
 
 ## Community & Contributing & Help
