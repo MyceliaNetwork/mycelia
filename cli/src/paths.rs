@@ -35,9 +35,9 @@ pub mod paths {
         dir_project_root().join("deployable")
     }
 
-    pub fn dir_dist() -> PathBuf {
-        dir_project_root().join("dist")
-    }
+    // pub fn dir_dist() -> PathBuf {
+    //     dir_project_root().join("dist")
+    // }
 
     pub fn dir_npm() -> PathBuf {
         dir_project_root().join("npm")

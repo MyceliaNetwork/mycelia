@@ -15,7 +15,6 @@ pub mod build {
         for guest in guests() {
             wasm(&guest)?;
             component(&guest)?;
-            // TODO: should this be included int he loop?
             workspace()?;
         }
 

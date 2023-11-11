@@ -711,7 +711,6 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "log",
- "mycelia_guest_function",
  "mycelia_http",
  "octocrab",
  "open",

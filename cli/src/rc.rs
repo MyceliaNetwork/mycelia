@@ -55,7 +55,13 @@ pub mod rc {
         use crate::paths::paths;
         use cargo_metadata::MetadataCommand;
         use semver::Version;
-        use std::{env, fs, fs::OpenOptions, io::Write, path::PathBuf, process::Command};
+        use std::{
+            env,
+            // fs, fs::OpenOptions,
+            // io::Write,
+            // path::PathBuf,
+            process::Command,
+        };
         use thiserror::Error;
 
         // HACK: cargo's fill_env is called upon build, but after cargo-workspaces
@@ -102,19 +108,19 @@ pub mod rc {
             };
         }
 
-        pub fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
-            let contents = fs::read_to_string(path.clone()).expect("Could not read file: {path?}");
-            let new = contents.replace(from, to);
+        // pub fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
+        //     let contents = fs::read_to_string(path.clone()).expect("Could not read file: {path?}");
+        //     let new = contents.replace(from, to);
 
-            let mut file = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open(path)
-                .expect("Could not open file: {path}");
+        //     let mut file = OpenOptions::new()
+        //         .write(true)
+        //         .truncate(true)
+        //         .open(path)
+        //         .expect("Could not open file: {path}");
 
-            file.write(new.as_bytes())
-                .expect("Could not write file: {path}");
-        }
+        //     file.write(new.as_bytes())
+        //         .expect("Could not write file: {path}");
+        // }
 
         #[derive(Debug, Error)]
         pub enum WorkspaceError {
@@ -126,44 +132,44 @@ pub mod rc {
     }
 
     pub mod build {
-        use std::process::Command;
+        // use std::process::Command;
         use thiserror::Error;
 
-        fn build_targets() -> Result<(), BuildError> {
-            let targets = [
-                "x86_64-unknown-linux-gnu", // # TODO: linux target support
-                "x86_64-pc-windows-gnu",
-                "x86_64-apple-darwin",
-                "aarch64-apple-darwin",
-            ];
+        // fn build_targets() -> Result<(), BuildError> {
+        //     let targets = [
+        //         "x86_64-unknown-linux-gnu", // # TODO: linux target support
+        //         "x86_64-pc-windows-gnu",
+        //         "x86_64-apple-darwin",
+        //         "aarch64-apple-darwin",
+        //     ];
 
-            for target in &targets {
-                cross_build(target)?;
-            }
+        //     for target in &targets {
+        //         cross_build(target)?;
+        //     }
 
-            Ok(())
-        }
+        //     Ok(())
+        // }
 
-        fn cross_build(target: &str) -> Result<(), BuildError> {
-            let cross_build_cmd = Command::new("cross")
-                .args(["build", "--release", "--target", target])
-                .status()
-                .expect("`cross build` Command failed");
+        // fn cross_build(target: &str) -> Result<(), BuildError> {
+        //     let cross_build_cmd = Command::new("cross")
+        //         .args(["build", "--release", "--target", target])
+        //         .status()
+        //         .expect("`cross build` Command failed");
 
-            let target = target.to_string();
+        //     let target = target.to_string();
 
-            return match cross_build_cmd.code() {
-                Some(0) => Ok(()),
-                Some(status) => Err(BuildError::BuildTarget { target, status }),
-                None => Ok(()),
-            };
-        }
+        //     return match cross_build_cmd.code() {
+        //         Some(0) => Ok(()),
+        //         Some(status) => Err(BuildError::BuildTarget { target, status }),
+        //         None => Ok(()),
+        //     };
+        // }
 
-        #[derive(Debug, Error)]
-        pub enum BuildError {
-            #[error("`cross build --release --target {target}` failed. Status code: {status}")]
-            BuildTarget { target: String, status: i32 },
-        }
+        // #[derive(Debug, Error)]
+        // pub enum BuildError {
+        //     #[error("`cross build --release --target {target}` failed. Status code: {status}")]
+        //     BuildTarget { target: String, status: i32 },
+        // }
     }
 
     pub mod git {

@@ -1,14 +1,14 @@
 #[allow(clippy::all)]
 pub mod publish {
     use crate::paths::paths;
-    use chrono::{DateTime, Utc};
+
     use dialoguer::{theme::ColorfulTheme, Select};
     use log::{error, info};
-    use octocrab::{self, models::repos::Release, models::ReleaseId};
+    use octocrab::{self, models::repos::Release};
     use semver::Version;
     use std::{
-        fs::{self, read_to_string, OpenOptions},
-        io::Write,
+        fs::{self},
+        // io::Write,
         path::{Path, PathBuf},
         process::Command,
     };
@@ -17,9 +17,9 @@ pub mod publish {
     // FIXME: impl custom Display trait on external Release type
     #[derive(Debug)]
     struct GitHubRelease {
-        id: ReleaseId,
+        // id: ReleaseId,
         tag_name: String,
-        created_at: Option<DateTime<Utc>>,
+        // created_at: Option<DateTime<Utc>>,
     }
 
     impl ToString for GitHubRelease {
@@ -146,9 +146,9 @@ pub mod publish {
             .into_iter()
             .map(|release| {
                 return GitHubRelease {
-                    id: release.id,
+                    // id: release.id,
                     tag_name: release.tag_name,
-                    created_at: release.created_at,
+                    // created_at: release.created_at,
                 };
             })
             .collect();
@@ -261,19 +261,19 @@ pub mod publish {
     //     };
     // }
 
-    pub fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
-        let contents = read_to_string(path.clone()).expect("Could not read file: {path?}");
-        let new = contents.replace(from, to);
+    // pub fn replace_all_in_file(path: PathBuf, from: &str, to: &str) {
+    //     let contents = read_to_string(path.clone()).expect("Could not read file: {path?}");
+    //     let new = contents.replace(from, to);
 
-        let mut file = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(path)
-            .expect("Could not open file: {path}");
+    //     let mut file = OpenOptions::new()
+    //         .write(true)
+    //         .truncate(true)
+    //         .open(path)
+    //         .expect("Could not open file: {path}");
 
-        file.write(new.as_bytes())
-            .expect("Could not write file: {path}");
-    }
+    //     file.write(new.as_bytes())
+    //         .expect("Could not write file: {path}");
+    // }
 
     #[derive(Debug, Error)]
     pub enum PublishError {
