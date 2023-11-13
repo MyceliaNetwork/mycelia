@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use dotenvy;
 use log::{debug, error, info, trace, warn};
 
 use std::{
@@ -153,6 +154,8 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<(), DynError> {
+    dotenvy::dotenv()?;
+
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info")
     }

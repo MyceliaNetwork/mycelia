@@ -570,6 +570,7 @@ name = "cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "dotenvy",
  "env_logger",
  "log",
  "open",
@@ -889,6 +890,12 @@ dependencies = [
  "redox_users",
  "winapi",
 ]
+
+[[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "either"
@@ -3926,11 +3933,6 @@ dependencies = [
 [[package]]
 name = "xtask"
 version = "0.1.0"
-dependencies = [
- "env_logger",
- "log",
- "tokio",
-]
 
 [[package]]
 name = "zstd"
