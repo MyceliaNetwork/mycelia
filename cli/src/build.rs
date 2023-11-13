@@ -73,9 +73,6 @@ pub mod build {
             priority: vec!["*".to_string(), "function".to_string()],
         };
 
-        // let name_map = HashMap::from([("function", "mycelia_guest_function")]);
-        // let priority = vec!["*".to_string(), "function".to_string()];
-
         let mut guests_filtered = dir
             .map(|p| p.unwrap().path())
             .filter(|p| p.is_dir())

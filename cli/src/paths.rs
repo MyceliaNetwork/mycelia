@@ -28,21 +28,4 @@ pub mod paths {
     pub fn dir_guests() -> PathBuf {
         dir_project_root().join("guests")
     }
-
-    // pub fn dir_dist() -> PathBuf {
-    //     dir_project_root().join("dist")
-    // }
-
-    // pub fn dir_npm_dist(tag: &String) -> PathBuf {
-    //     let path = format!("dist/mycelia-{tag}/npm/mycelia");
-    //     dir_project_root().join(path)
-    // }
-
-    // pub fn file_npm_package_manifest(tag: &String) -> PathBuf {
-    //     dir_npm_dist(tag).join("package.json")
-    // }
-
-    // pub fn file_npm_info(tag: &String) -> PathBuf {
-    //     dir_npm_dist(tag).join("info.json")
-    // }
 }
