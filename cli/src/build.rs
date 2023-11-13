@@ -14,8 +14,7 @@ pub mod build {
         fs::create_dir_all(&paths::dir_components())?;
 
         for guest in guests() {
-            wasm(&guest)?;
-            component(&guest)?;
+            guest.build()?;
         }
 
         workspace(target)?;
@@ -42,6 +41,23 @@ pub mod build {
         }
     }
 
+    trait Buildable {
+        fn build(&self) -> Result<(), BuildError>;
+    }
+
+    impl Buildable for Guest {
+        fn build(&self) -> Result<(), BuildError> {
+            wasm(self)?;
+            component(self)?;
+            Ok(())
+        }
+    }
+
+    struct GuestConfig<'a> {
+        name_map: HashMap<&'a str, &'a str>,
+        priority: Vec<String>,
+    }
+
     // 1. Read all contents of the ./guests/ directory
     // 2. Filter out all non-directories (like README.md)
     // 3. Map the remaining paths to Guest structs containing its:
@@ -51,8 +67,14 @@ pub mod build {
     // 4. Order the items by priority. Because packages like `function` should be built last
     fn guests() -> Vec<Guest> {
         let dir = fs::read_dir(&paths::dir_guests()).unwrap();
-        let name_map = HashMap::from([("function", "mycelia_guest_function")]);
-        let priority = vec!["*".to_string(), "function".to_string()];
+
+        let config = GuestConfig {
+            name_map: HashMap::from([("function", "mycelia_guest_function")]),
+            priority: vec!["*".to_string(), "function".to_string()],
+        };
+
+        // let name_map = HashMap::from([("function", "mycelia_guest_function")]);
+        // let priority = vec!["*".to_string(), "function".to_string()];
 
         let mut guests_filtered = dir
             .map(|p| p.unwrap().path())
@@ -63,14 +85,22 @@ pub mod build {
                     .unwrap()
                     .to_str()
                     .unwrap();
-                let name_output = name_map.get(name);
+                let name_output = config.name_map.get(name);
                 return Guest::new(p.clone(), name, name_output.copied());
             })
             .collect::<Vec<_>>();
 
         guests_filtered.sort_by(|a, b| {
-            let a = priority.iter().position(|p| p == &a.name).unwrap_or(0);
-            let b = priority.iter().position(|p| p == &b.name).unwrap_or(0);
+            let a = config
+                .priority
+                .iter()
+                .position(|p| p == &a.name)
+                .unwrap_or(0);
+            let b = config
+                .priority
+                .iter()
+                .position(|p| p == &b.name)
+                .unwrap_or(0);
 
             return match a.cmp(&b) {
                 Ordering::Less => Ordering::Less,
