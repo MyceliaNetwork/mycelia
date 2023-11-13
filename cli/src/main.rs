@@ -1,6 +1,11 @@
 use clap::{Parser, Subcommand};
 use log::{debug, error, info, trace, warn};
 
+mod build;
+mod paths;
+
+pub use crate::build::build::build;
+
 use std::{
     env,
     error::Error,
@@ -85,8 +90,10 @@ struct DevelopmentServerClient {
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Build the entire Mycelia project
-    /// Shortcut for: `cargo build --workspace && cargo xtask build`
-    Build,
+    Build {
+        /// The target to build to.
+        target: Option<String>,
+    },
     /// Start the Mycelia development server
     Start {
         /// The ip to listen on.
@@ -172,8 +179,8 @@ async fn try_main() -> Result<(), DynError> {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Commands::Build => {
-            build()?;
+        Commands::Build { target } => {
+            build(target.clone())?;
         }
         Commands::Start {
             ip,
@@ -195,25 +202,6 @@ async fn try_main() -> Result<(), DynError> {
         } => {
             deploy(ip, http_port, rpc_port, component).await;
         }
-    }
-
-    Ok(())
-}
-
-fn build() -> Result<(), DynError> {
-    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let status = std::process::Command::new(cargo)
-        .current_dir(project_root())
-        .args(&["xtask", "build"])
-        .status()?;
-
-    if !status.success() {
-        Err(format!(
-            "`cargo xtask build` failed.
-
-Status code: {}",
-            status.code().expect("Build failed: no status")
-        ))?;
     }
 
     Ok(())
