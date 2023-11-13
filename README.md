@@ -58,6 +58,10 @@ RUST_LOG=info cargo run start # default
 RUST_LOG=trace cargo run start
 ```
 
+## Environment variables
+
+To add environment variables, create a `.env` file in the root of the project. This file is ignored by git.
+
 ## Community & Contributing & Help
 
 Come join our [Discord](https://discord.gg/hKMtmdMJ)
