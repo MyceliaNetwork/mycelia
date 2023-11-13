@@ -3926,11 +3926,6 @@ dependencies = [
 [[package]]
 name = "xtask"
 version = "0.1.0"
-dependencies = [
- "env_logger",
- "log",
- "tokio",
-]
 
 [[package]]
 name = "zstd"

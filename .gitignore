@@ -29,3 +29,6 @@ expanded.rs
 
 # Node
 node_modules/
+
+# User project using `cargo run new`
+deployable/
