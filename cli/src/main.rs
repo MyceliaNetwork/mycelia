@@ -1,6 +1,11 @@
 use clap::{Parser, Subcommand};
 use log::{debug, error, info, trace, warn};
 
+mod new;
+mod paths;
+
+pub use crate::new::new::new;
+
 use std::{
     env,
     error::Error,
@@ -84,6 +89,7 @@ struct DevelopmentServerClient {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    New,
     /// Build the entire Mycelia project
     /// Shortcut for: `cargo build --workspace && cargo xtask build`
     Build,
@@ -172,7 +178,10 @@ async fn try_main() -> Result<(), DynError> {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Commands::Build => {
+        Commands::New {} => {
+            new().await?;
+        }
+        Commands::Build {} => {
             build()?;
         }
         Commands::Start {
