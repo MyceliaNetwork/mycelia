@@ -13,7 +13,11 @@ pub mod paths {
             .to_path_buf()
     }
 
-    pub fn dir_deployable_target() -> PathBuf {
+    pub fn dir_deployable() -> PathBuf {
         dir_project_root().join("deployable")
+    }
+
+    pub fn dir_deployable_backend(name: String) -> PathBuf {
+        dir_deployable().join(name).join("backend")
     }
 }

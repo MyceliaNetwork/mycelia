@@ -1,6 +1,7 @@
 #[allow(clippy::all)]
 pub mod new {
     use crate::paths::paths;
+    use dialoguer::{theme::ColorfulTheme, Input};
     use log::{error, info};
     use std::{env, fs};
     use thiserror::Error;
@@ -8,7 +9,6 @@ pub mod new {
 
     type DynError = Box<dyn std::error::Error>;
 
-    // TODO: create backend/ directory
     pub async fn new() -> Result<(), DynError> {
         if let Err(error) = try_new().await {
             error!("{error:?}");
@@ -22,23 +22,31 @@ pub mod new {
     async fn try_new() -> Result<(), NewProjectError> {
         info!("Creating new Mycelia project");
 
-        let _ = fs::create_dir_all(&paths::dir_deployable_target());
+        let app_name: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Your app name")
+            .interact_text()
+            .unwrap();
 
-        if let Err(error) = scaffold_next().await {
+        if let Err(error) = scaffold_next(app_name.clone()).await {
             return Err(error);
         }
+        let _ = fs::create_dir_all(&paths::dir_deployable_backend(app_name));
 
         return Ok(());
     }
 
-    async fn scaffold_next() -> Result<(), NewProjectError> {
-        let _ = fs::create_dir_all(&paths::dir_deployable_target());
+    async fn scaffold_next(app_name: String) -> Result<(), NewProjectError> {
+        let _ = fs::create_dir_all(&paths::dir_deployable());
         let npx = env::var("NPX").unwrap_or_else(|_| "npx".to_string());
         let npx_cmd = Command::new(npx)
-            .current_dir(&paths::dir_deployable_target())
-            // Next.js app router is disabled as it relies on server components.
-            // We technically cannot support this at the moment.
-            .args(&["create-next-app@latest", "--no-app"])
+            .current_dir(&paths::dir_deployable())
+            .args(&[
+                "create-next-app@latest",
+                app_name.as_str(),
+                // Next.js app router is disabled as it relies on server components.
+                // We technically cannot support this at the moment.
+                "--no-app",
+            ])
             .status()
             .await
             .expect("Failed to run `npx create-next-app --no-app`");
