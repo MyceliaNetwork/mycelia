@@ -3,8 +3,13 @@ use log::{debug, error, info, trace, warn};
 
 mod build;
 mod paths;
+mod rc;
+mod release;
+mod verson;
 
 pub use crate::build::build::build;
+pub use crate::rc::rc::rc;
+pub use crate::release::release::release;
 
 use std::{
     env,
@@ -156,6 +161,8 @@ enum Commands {
         #[clap(long, default_value = "50051")]
         rpc_port: u16,
     },
+    Rc,
+    Release,
 }
 
 #[tokio::main]
@@ -179,6 +186,13 @@ async fn try_main() -> Result<(), DynError> {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
+        Commands::Rc => {
+            rc();
+        }
+        Commands::Release => {
+            release().await?;
+        }
+
         Commands::Build { target } => {
             build(target.clone())?;
         }
