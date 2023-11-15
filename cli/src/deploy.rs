@@ -14,9 +14,9 @@ pub mod deploy {
 
     #[derive(PartialEq)]
     enum ServerState {
-        NotStarted,
-        StartingUp,
-        Started,
+        Idle,
+        Initializing,
+        Active,
     }
 
     /*
@@ -49,10 +49,7 @@ pub mod deploy {
         }
 
         let server_state = poll_server_state(ip, rpc_port, &false).await;
-        if server_state
-            .as_ref()
-            .is_ok_and(|s| s == &ServerState::NotStarted)
-        {
+        if server_state.as_ref().is_ok_and(|s| s == &ServerState::Idle) {
             let _ = start(ip, http_port, rpc_port, &false, &true).await;
             let _ = poll_server_state(ip, rpc_port, &true).await;
         };
@@ -72,7 +69,7 @@ pub mod deploy {
                         .expect("Deploy component failed");
                     match response.into_inner() {
                         DeployReply { message } => {
-                            if server_state.unwrap() == ServerState::NotStarted {
+                            if server_state.unwrap() == ServerState::Idle {
                                 stop(ip, rpc_port).await;
                             }
                             if message == "Ok".to_string() {
@@ -85,7 +82,7 @@ pub mod deploy {
                     };
                 }
                 Err(err) => {
-                    if server_state.unwrap() == ServerState::NotStarted {
+                    if server_state.unwrap() == ServerState::Idle {
                         stop(ip, rpc_port).await;
                     }
                     return Err(DeploymentError::ClientError {
@@ -99,8 +96,8 @@ pub mod deploy {
     }
 
     // We use the tonic crate to send an EchoRequest to the development_server through a gRPC address
-    // The `just_started` argument is used to return ServerState::StartingUp in stead of
-    // ServerState::NotStarted when "transport error" is returned by the gRPC client.
+    // The `just_started` argument is used to return ServerState::Initializing in stead of
+    // ServerState::Idle when "transport error" is returned by the gRPC client.
     async fn server_state(
         address: String,
         just_started: &bool,
@@ -118,19 +115,19 @@ pub mod deploy {
                     EchoReply { message } => {
                         if message == payload.to_string() {
                             warn!("Development server already listening");
-                            return Ok(ServerState::Started);
+                            return Ok(ServerState::Active);
                         } else {
                             error!("Unexpected EchoReply from RPC server. Message: {message}",);
                         }
-                        return Ok(ServerState::StartingUp);
+                        return Ok(ServerState::Initializing);
                     }
                 };
             }
             Err(err) => match err.to_string().as_str() {
                 "transport error" => {
                     return match *just_started {
-                        true => Ok(ServerState::StartingUp),
-                        false => Ok(ServerState::NotStarted),
+                        true => Ok(ServerState::Initializing),
+                        false => Ok(ServerState::Idle),
                     };
                 }
                 err => {
@@ -153,15 +150,15 @@ pub mod deploy {
             let state = server_state(rpc_addr, just_started).await;
 
             match state {
-                Ok(ServerState::StartingUp) => {
+                Ok(ServerState::Initializing) => {
                     tokio::time::sleep(Duration::from_secs(1)).await;
 
                     if start.elapsed() > timeout {
                         return Err(PollError::Timeout);
                     }
                 }
-                Ok(ServerState::Started) => return Ok(ServerState::Started),
-                Ok(ServerState::NotStarted) => return Ok(ServerState::NotStarted),
+                Ok(ServerState::Active) => return Ok(ServerState::Active),
+                Ok(ServerState::Idle) => return Ok(ServerState::Idle),
                 Err(ServerError::ServerError { cause }) => {
                     return Err(PollError::ServerError { cause })
                 }
